@@ -1,16 +1,29 @@
+/*
+ * Forge Mod Loader
+ * Copyright (c) 2012-2013 cpw.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the GNU Lesser Public License v2.1
+ * which accompanies this distribution, and is available at
+ * http://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ * 
+ * Contributors:
+ *     cpw - implementation
+ */
+
 package cpw.mods.fml.client;
 
-import net.minecraft.client.class_534;
-import net.minecraft.client.texture.ITexturePack;
+import java.awt.Dimension;
 
-import java.awt.*;
+import net.minecraft.client.renderer.RenderEngine;
+import net.minecraft.client.texturepacks.ITexturePack;
 
-public interface ITextureFX {
-    void onTexturePackChanged(class_534 arg, ITexturePack arg2, Dimension dimension);
+public interface ITextureFX
+{
+    public void onTexturePackChanged(RenderEngine engine, ITexturePack texturepack, Dimension dimensions);
 
-    void onTextureDimensionsUpdate(int i, int j);
-
-    void setErrored(boolean bl);
-
-    boolean getErrored();
+    public void onTextureDimensionsUpdate(int width, int height);
+    
+    public void setErrored(boolean errored);
+    
+    public boolean getErrored();
 }

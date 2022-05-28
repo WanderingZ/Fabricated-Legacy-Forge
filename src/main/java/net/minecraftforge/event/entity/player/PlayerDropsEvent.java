@@ -1,20 +1,38 @@
 package net.minecraftforge.event.entity.player;
 
+import java.util.ArrayList;
+
 import net.minecraft.enchantment.EnchantmentHelper;
-import net.minecraft.entity.ItemEntity;
-import net.minecraft.entity.damage.DamageSource;
-import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.entity.item.EntityItem;
+import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.util.DamageSource;
 import net.minecraftforge.event.Cancelable;
 import net.minecraftforge.event.entity.living.LivingDropsEvent;
 
-import java.util.ArrayList;
-
+/**
+ * Child class of LivingDropEvent that is fired specifically when a
+ * player dies.  Canceling the event will prevent ALL drops from entering the
+ * world.
+ */
 @Cancelable
-public class PlayerDropsEvent extends LivingDropsEvent {
-    public final PlayerEntity entityPlayer;
+public class PlayerDropsEvent extends LivingDropsEvent
+{
+    public final EntityPlayer entityPlayer;
 
-    public PlayerDropsEvent(PlayerEntity entity, DamageSource source, ArrayList<ItemEntity> drops, boolean recentlyHit) {
-        super(entity, source, drops, source.getAttacker() instanceof PlayerEntity ? EnchantmentHelper.method_3536(((PlayerEntity)source.getAttacker()).inventory) : 0, recentlyHit, 0);
+    /**
+     * Creates a new event containing all the items that will drop into the
+     * world when a player dies.
+     * @param entity The dying player. 
+     * @param source The source of the damage which is killing the player.
+     * @param drops List of all drops entering the world.
+     */
+    public PlayerDropsEvent(EntityPlayer entity, DamageSource source, ArrayList<EntityItem> drops, boolean recentlyHit)
+    {
+        super(entity, source, drops, 
+            (source.getEntity() instanceof EntityPlayer) ? 
+                EnchantmentHelper.getLootingModifier(((EntityPlayer)source.getEntity())) : 0,
+            recentlyHit, 0);
+        
         this.entityPlayer = entity;
     }
 }

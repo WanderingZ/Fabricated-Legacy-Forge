@@ -1,273 +1,143 @@
+/*
+ * Forge Mod Loader
+ * Copyright (c) 2012-2013 cpw.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the GNU Lesser Public License v2.1
+ * which accompanies this distribution, and is available at
+ * http://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * Contributors:
+ *     cpw - implementation
+ */
+
 package cpw.mods.fml.client;
 
-import com.google.common.collect.ArrayListMultimap;
-import com.google.common.collect.Maps;
-import com.google.common.collect.Multimap;
-import cpw.mods.fml.common.FMLCommonHandler;
-import cpw.mods.fml.common.FMLLog;
-import cpw.mods.fml.common.ModContainer;
-import net.minecraft.ModTextureStatic;
-import net.minecraft.client.Minecraft;
-import net.minecraft.client.class_534;
-import net.minecraft.client.class_584;
-import net.minecraft.client.texture.ITexturePack;
-import org.lwjgl.opengl.GL11;
-
-import javax.imageio.ImageIO;
-import java.awt.*;
+import java.awt.Dimension;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.ByteBuffer;
-import java.util.*;
-import java.util.List;
+import java.util.Map;
 
-public class TextureFXManager {
+import javax.imageio.ImageIO;
+
+import org.lwjgl.opengl.ContextCapabilities;
+import org.lwjgl.opengl.GLContext;
+
+import com.google.common.collect.Maps;
+
+import cpw.mods.fml.common.FMLLog;
+
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.RenderEngine;
+
+public class TextureFXManager
+{
     private static final TextureFXManager INSTANCE = new TextureFXManager();
-    private Map<Integer, TextureFXManager.TextureProperties> textureProperties = Maps.newHashMap();
-    private Multimap<String, OverrideInfo> overrideInfo = ArrayListMultimap.create();
-    private HashSet<OverrideInfo> animationSet = new HashSet();
-    private List<class_584> addedTextureFX = new ArrayList();
+
     private Minecraft client;
-    private HashMap<Integer, Dimension> textureDims = new HashMap();
-    private IdentityHashMap<class_584, Integer> effectTextures = new IdentityHashMap();
-    private ITexturePack earlyTexturePack;
 
-    public TextureFXManager() {
-    }
+    private Map<Integer,TextureHolder> texturesById = Maps.newHashMap();
+    private Map<String, TextureHolder> texturesByName = Maps.newHashMap();
 
-    void setClient(Minecraft client) {
+    private TextureHelper helper;
+
+    void setClient(Minecraft client)
+    {
         this.client = client;
     }
-
-    public boolean onUpdateTextureEffect(class_584 effect) {
-        ITextureFX ifx = effect instanceof ITextureFX ? (ITextureFX)effect : null;
-        if (ifx != null && ifx.getErrored()) {
-            return false;
-        } else {
-            String name = effect.getClass().getSimpleName();
-            this.client.profiler.push(name);
-
-            try {
-                if (!FMLClientHandler.instance().hasOptifine()) {
-                    effect.method_1613();
-                }
-            } catch (Exception var6) {
-                FMLLog.warning("Texture FX %s has failed to animate. Likely caused by a texture pack change that they did not respond correctly to", new Object[]{name});
-                if (ifx != null) {
-                    ifx.setErrored(true);
-                }
-
-                this.client.profiler.pop();
-                return false;
-            }
-
-            this.client.profiler.pop();
-            if (ifx != null) {
-                Dimension dim = this.getTextureDimensions(effect);
-                int target = (dim.width >> 4) * (dim.height >> 4) << 2;
-                if (effect.field_2152.length != target) {
-                    FMLLog.warning("Detected a texture FX sizing discrepancy in %s (%d, %d)", new Object[]{name, effect.field_2152.length, target});
-                    ifx.setErrored(true);
-                    return false;
-                }
-            }
-
-            return true;
+    public BufferedImage loadImageFromTexturePack(RenderEngine renderEngine, String path) throws IOException
+    {
+        InputStream image=client.field_71418_C.func_77292_e().func_77532_a(path);
+        if (image==null) {
+            throw new RuntimeException(String.format("The requested image path %s is not found",path));
         }
+        BufferedImage result=ImageIO.read(image);
+        if (result==null)
+        {
+            throw new RuntimeException(String.format("The requested image path %s appears to be corrupted",path));
+        }
+        return result;
     }
 
-    public void scaleTextureFXData(byte[] data, ByteBuffer buf, int target, int length) {
-        int sWidth = (int)Math.sqrt((double)(data.length / 4));
-        int factor = target / sWidth;
-        byte[] tmp = new byte[4];
-        buf.clear();
-        if (factor > 1) {
-            for(int y = 0; y < sWidth; ++y) {
-                int sRowOff = sWidth * y;
-                int tRowOff = target * y * factor;
+    public static TextureFXManager instance()
+    {
+        return INSTANCE;
+    }
 
-                for(int x = 0; x < sWidth; ++x) {
-                    int sPos = (x + sRowOff) * 4;
-                    tmp[0] = data[sPos + 0];
-                    tmp[1] = data[sPos + 1];
-                    tmp[2] = data[sPos + 2];
-                    tmp[3] = data[sPos + 3];
-                    int tPosTop = x * factor + tRowOff;
-
-                    for(int y2 = 0; y2 < factor; ++y2) {
-                        buf.position((tPosTop + y2 * target) * 4);
-
-                        for(int x2 = 0; x2 < factor; ++x2) {
-                            buf.put(tmp);
-                        }
+    public void fixTransparency(BufferedImage loadedImage, String textureName)
+    {
+        if (textureName.matches("^/mob/.*_eyes.*.png$"))
+        {
+            for (int x = 0; x < loadedImage.getWidth(); x++) {
+                for (int y = 0; y < loadedImage.getHeight(); y++) {
+                    int argb = loadedImage.getRGB(x, y);
+                    if ((argb & 0xff000000) == 0 && argb != 0) {
+                        loadedImage.setRGB(x, y, 0);
                     }
                 }
             }
         }
-
-        buf.position(0).limit(length);
+    }
+    public void bindTextureToName(String name, int index)
+    {
+        TextureHolder holder = new TextureHolder();
+        holder.textureId = index;
+        holder.textureName = name;
+        texturesById.put(index,holder);
+        texturesByName.put(name,holder);
     }
 
-    public void onPreRegisterEffect(class_584 effect) {
-        Dimension dim = this.getTextureDimensions(effect);
-        if (effect instanceof ITextureFX) {
-            ((ITextureFX)effect).onTextureDimensionsUpdate(dim.width, dim.height);
-        }
-
-    }
-
-    public int getEffectTexture(class_584 effect) {
-        Integer id = (Integer)this.effectTextures.get(effect);
-        if (id != null) {
-            return id;
-        } else {
-            int old = GL11.glGetInteger(32873);
-            effect.method_1614(this.client.field_3813);
-            id = GL11.glGetInteger(32873);
-            GL11.glBindTexture(3553, old);
-            this.effectTextures.put(effect, id);
-            return id;
-        }
-    }
-
-    public void onTexturePackChange(class_534 engine, ITexturePack texturepack, List<class_584> effects) {
-        pruneOldTextureFX(texturepack, effects);
-
-        for (class_584 tex : effects)
+    public void setTextureDimensions(int index, int j, int k)
+    {
+        TextureHolder holder = texturesById.get(index);
+        if (holder == null)
         {
-            if (tex instanceof ITextureFX)
-            {
-                ((ITextureFX)tex).onTexturePackChanged(engine, texturepack, getTextureDimensions(tex));
-            }
+            return;
         }
-
-        loadTextures(texturepack);
+        holder.x = j;
+        holder.y = k;
     }
 
-    public void setTextureDimensions(int id, int width, int height, List<class_584> effects) {
-        Dimension dim = new Dimension(width, height);
-        textureDims.put(id, dim);
-
-        for (class_584 tex : effects)
-        {
-            if (getEffectTexture(tex) == id && tex instanceof ITextureFX)
-            {
-                ((ITextureFX)tex).onTextureDimensionsUpdate(width, height);
-            }
-        }
-    }
-
-    public Dimension getTextureDimensions(class_584 effect) {
-        return this.getTextureDimensions(this.getEffectTexture(effect));
-    }
-
-    public Dimension getTextureDimensions(int id) {
-        return (Dimension)this.textureDims.get(id);
-    }
-
-    public void addAnimation(class_584 anim) {
-        OverrideInfo info = new OverrideInfo();
-        info.index = anim.field_2153;
-        info.imageIndex = anim.field_2157;
-        info.textureFX = anim;
-        if (this.animationSet.contains(info)) {
-            this.animationSet.remove(info);
-        }
-
-        this.animationSet.add(info);
-    }
-
-    public void loadTextures(ITexturePack texturePack) {
-        this.registerTextureOverrides(this.client.field_3813);
-    }
-
-    public void registerTextureOverrides(class_534 renderer) {
-        for (OverrideInfo animationOverride : animationSet) {
-            renderer.method_1416(animationOverride.textureFX);
-            addedTextureFX.add(animationOverride.textureFX);
-            FMLCommonHandler.instance().getFMLLogger().finer(String.format("Registered texture override %d (%d) on %s (%d)", animationOverride.index, animationOverride.textureFX.field_2153, animationOverride.textureFX.getClass().getSimpleName(), animationOverride.textureFX.field_2157));
-        }
-
-        for (String fileToOverride : overrideInfo.keySet()) {
-            for (OverrideInfo override : overrideInfo.get(fileToOverride)) {
-                try
-                {
-                    BufferedImage image=loadImageFromTexturePack(renderer, override.override);
-                    ModTextureStatic mts=new ModTextureStatic(override.index, 1, override.texture, image);
-                    renderer.method_1416(mts);
-                    addedTextureFX.add(mts);
-                    FMLCommonHandler.instance().getFMLLogger().finer(String.format("Registered texture override %d (%d) on %s (%d)", override.index, mts.field_2153, override.texture, mts.field_2157));
-                }
-                catch (IOException e)
-                {
-                    FMLCommonHandler.instance().getFMLLogger().throwing("FMLClientHandler", "registerTextureOverrides", e);
-                }
-            }
-        }
-    }
-
-    protected void registerAnimatedTexturesFor(ModContainer mod) {
-    }
-
-    public void onEarlyTexturePackLoad(ITexturePack fallback) {
-        if (this.client == null) {
-            this.earlyTexturePack = fallback;
-        } else {
-            this.loadTextures(fallback);
-        }
-
-    }
-
-    public void pruneOldTextureFX(ITexturePack var1, List<class_584> effects) {
-        ListIterator<class_584> li = this.addedTextureFX.listIterator();
-
-        while(li.hasNext()) {
-            class_584 tex = (class_584)li.next();
-            if (tex instanceof FMLTextureFX) {
-                if (((FMLTextureFX)tex).unregister(this.client.field_3813, effects)) {
-                    li.remove();
-                }
-            } else {
-                effects.remove(tex);
-                li.remove();
-            }
-        }
-
-    }
-
-    public void addNewTextureOverride(String textureToOverride, String overridingTexturePath, int location) {
-        OverrideInfo info = new OverrideInfo();
-        info.index = location;
-        info.override = overridingTexturePath;
-        info.texture = textureToOverride;
-        this.overrideInfo.put(textureToOverride, info);
-        FMLLog.fine("Overriding %s @ %d with %s. %d slots remaining", new Object[]{textureToOverride, location, overridingTexturePath, SpriteHelper.freeSlotCount(textureToOverride)});
-    }
-
-    public BufferedImage loadImageFromTexturePack(class_534 renderEngine, String path) throws IOException {
-        InputStream image = this.client.texturePackManager.getCurrentTexturePack().openStream(path);
-        if (image == null) {
-            throw new RuntimeException(String.format("The requested image path %s is not found", path));
-        } else {
-            BufferedImage result = ImageIO.read(image);
-            if (result == null) {
-                throw new RuntimeException(String.format("The requested image path %s appears to be corrupted", path));
-            } else {
-                return result;
-            }
-        }
-    }
-
-    public static TextureFXManager instance() {
-        return INSTANCE;
-    }
-
-    private class TextureProperties {
+    private class TextureHolder {
         private int textureId;
-        private Dimension dim;
+        private String textureName;
+        private int x;
+        private int y;
+    }
 
-        private TextureProperties() {
+    public Dimension getTextureDimensions(String texture)
+    {
+        return texturesByName.containsKey(texture) ? new Dimension(texturesByName.get(texture).x, texturesByName.get(texture).y) : new Dimension(1,1);
+    }
+
+
+    public TextureHelper getHelper()
+    {
+        if (helper == null)
+        {
+            ContextCapabilities capabilities = GLContext.getCapabilities();
+            boolean has43 = false;
+            try
+            {
+                has43 = capabilities.getClass().getField("GL_ARB_copy_image").getBoolean(capabilities);
+            }
+            catch (Exception e)
+            {
+                //e.printStackTrace();
+                // NOOP - LWJGL needs updating
+                FMLLog.info("Forge Mod Loader has detected an older LWJGL version, new advanced texture animation features are disabled");
+            }
+//            if (has43 && Boolean.parseBoolean(System.getProperty("fml.useGL43","true")))
+//            {
+//                FMLLog.info("Using the new OpenGL 4.3 advanced capability for animations");
+//                helper = new OpenGL43TextureHelper();
+//            }
+//            else
+            {
+                FMLLog.info("Not using advanced OpenGL 4.3 advanced capability for animations : OpenGL 4.3 is %s", has43 ? "available" : "not available");
+                helper = new CopySubimageTextureHelper();
+            }
         }
+        return helper;
     }
 }

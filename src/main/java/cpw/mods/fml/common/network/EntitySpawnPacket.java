@@ -1,26 +1,45 @@
+/*
+ * Forge Mod Loader
+ * Copyright (c) 2012-2013 cpw.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the GNU Lesser Public License v2.1
+ * which accompanies this distribution, and is available at
+ * http://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ * 
+ * Contributors:
+ *     cpw - implementation
+ */
+
 package cpw.mods.fml.common.network;
+
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.IOException;
+import java.util.List;
+import java.util.logging.Level;
+
+import net.minecraft.entity.*;
+import net.minecraft.network.INetworkManager;
+import net.minecraft.network.packet.NetHandler;
+import net.minecraft.util.MathHelper;
 
 import com.google.common.io.ByteArrayDataInput;
 import com.google.common.io.ByteArrayDataOutput;
 import com.google.common.io.ByteStreams;
+
 import cpw.mods.fml.common.FMLCommonHandler;
 import cpw.mods.fml.common.FMLLog;
 import cpw.mods.fml.common.ModContainer;
 import cpw.mods.fml.common.registry.EntityRegistry;
+import cpw.mods.fml.common.registry.EntityRegistry.EntityRegistration;
 import cpw.mods.fml.common.registry.IEntityAdditionalSpawnData;
 import cpw.mods.fml.common.registry.IThrowableEntity;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.data.DataTracker;
-import net.minecraft.entity.mob.MobEntity;
-import net.minecraft.network.Connection;
-import net.minecraft.network.listener.PacketListener;
-import net.minecraft.util.math.MathHelper;
 
-import java.io.*;
-import java.util.List;
-import java.util.logging.Level;
+public class EntitySpawnPacket extends FMLPacket
+{
 
-public class EntitySpawnPacket extends FMLPacket {
     public int networkId;
     public int modEntityId;
     public int entityId;
@@ -40,126 +59,139 @@ public class EntitySpawnPacket extends FMLPacket {
     public int rawY;
     public int rawZ;
 
-    public EntitySpawnPacket() {
+    public EntitySpawnPacket()
+    {
         super(Type.ENTITYSPAWN);
     }
 
-    public byte[] generatePacket(Object... data) {
-        EntityRegistry.EntityRegistration er = (EntityRegistry.EntityRegistration)data[0];
-        Entity ent = (Entity)data[1];
-        NetworkModHandler handler = (NetworkModHandler)data[2];
+    @Override
+    public byte[] generatePacket(Object... data)
+    {
+        EntityRegistration er = (EntityRegistration) data[0];
+        Entity ent = (Entity) data[1];
+        NetworkModHandler handler = (NetworkModHandler) data[2];
         ByteArrayDataOutput dat = ByteStreams.newDataOutput();
+
         dat.writeInt(handler.getNetworkId());
         dat.writeInt(er.getModEntityId());
-        dat.writeInt(ent.id);
-        dat.writeInt(MathHelper.floor(ent.x * 32.0));
-        dat.writeInt(MathHelper.floor(ent.y * 32.0));
-        dat.writeInt(MathHelper.floor(ent.z * 32.0));
-        dat.writeByte((byte)((int)(ent.yaw * 256.0F / 360.0F)));
-        dat.writeByte((byte)((int)(ent.pitch * 256.0F / 360.0F)));
-        if (ent instanceof MobEntity) {
-            dat.writeByte((byte)((int)(((MobEntity)ent).field_3315 * 256.0F / 360.0F)));
-        } else {
+        // entity id
+        dat.writeInt(ent.field_70157_k);
+
+        // entity pos x,y,z
+        dat.writeInt(MathHelper.func_76128_c(ent.field_70165_t * 32D));
+        dat.writeInt(MathHelper.func_76128_c(ent.field_70163_u * 32D));
+        dat.writeInt(MathHelper.func_76128_c(ent.field_70161_v * 32D));
+
+        // yaw, pitch
+        dat.writeByte((byte) (ent.field_70177_z * 256.0F / 360.0F));
+        dat.writeByte((byte) (ent.field_70125_A * 256.0F / 360.0F));
+
+        // head yaw
+        if (ent instanceof EntityLiving)
+        {
+            dat.writeByte((byte) (((EntityLiving)ent).field_70759_as * 256.0F / 360.0F));
+        }
+        else
+        {
             dat.writeByte(0);
         }
-
         ByteArrayOutputStream bos = new ByteArrayOutputStream();
         DataOutputStream dos = new DataOutputStream(bos);
-
-        try {
-            ent.getDataTracker().method_2696(dos);
-        } catch (Exception var17) {
+        try
+        {
+            ent.func_70096_w().func_75689_a(dos);
+        }
+        catch (IOException e)
+        {
+            // unpossible
         }
 
         dat.write(bos.toByteArray());
-        if (ent instanceof IThrowableEntity) {
+
+        if (ent instanceof IThrowableEntity)
+        {
             Entity owner = ((IThrowableEntity)ent).getThrower();
-            dat.writeInt(owner == null ? ent.id : owner.id);
-            double maxVel = 3.9;
-            double mX = ent.velocityX;
-            double mY = ent.velocityY;
-            double mZ = ent.velocityZ;
-            if (mX < -maxVel) {
-                mX = -maxVel;
-            }
-
-            if (mY < -maxVel) {
-                mY = -maxVel;
-            }
-
-            if (mZ < -maxVel) {
-                mZ = -maxVel;
-            }
-
-            if (mX > maxVel) {
-                mX = maxVel;
-            }
-
-            if (mY > maxVel) {
-                mY = maxVel;
-            }
-
-            if (mZ > maxVel) {
-                mZ = maxVel;
-            }
-
-            dat.writeInt((int)(mX * 8000.0));
-            dat.writeInt((int)(mY * 8000.0));
-            dat.writeInt((int)(mZ * 8000.0));
-        } else {
+            dat.writeInt(owner == null ? ent.field_70157_k : owner.field_70157_k);
+            double maxVel = 3.9D;
+            double mX = ent.field_70159_w;
+            double mY = ent.field_70181_x;
+            double mZ = ent.field_70179_y;
+            if (mX < -maxVel) mX = -maxVel;
+            if (mY < -maxVel) mY = -maxVel;
+            if (mZ < -maxVel) mZ = -maxVel;
+            if (mX >  maxVel) mX =  maxVel;
+            if (mY >  maxVel) mY =  maxVel;
+            if (mZ >  maxVel) mZ =  maxVel;
+            dat.writeInt((int)(mX * 8000D));
+            dat.writeInt((int)(mY * 8000D));
+            dat.writeInt((int)(mZ * 8000D));
+        }
+        else
+        {
             dat.writeInt(0);
         }
-
-        if (ent instanceof IEntityAdditionalSpawnData) {
+        if (ent instanceof IEntityAdditionalSpawnData)
+        {
             ((IEntityAdditionalSpawnData)ent).writeSpawnData(dat);
         }
 
         return dat.toByteArray();
     }
 
-    public FMLPacket consumePacket(byte[] data) {
+    @Override
+    public FMLPacket consumePacket(byte[] data)
+    {
         ByteArrayDataInput dat = ByteStreams.newDataInput(data);
-        this.networkId = dat.readInt();
-        this.modEntityId = dat.readInt();
-        this.entityId = dat.readInt();
-        this.rawX = dat.readInt();
-        this.rawY = dat.readInt();
-        this.rawZ = dat.readInt();
-        this.scaledX = (double)this.rawX / 32.0;
-        this.scaledY = (double)this.rawY / 32.0;
-        this.scaledZ = (double)this.rawZ / 32.0;
-        this.scaledYaw = (float)dat.readByte() * 360.0F / 256.0F;
-        this.scaledPitch = (float)dat.readByte() * 360.0F / 256.0F;
-        this.scaledHeadYaw = (float)dat.readByte() * 360.0F / 256.0F;
+        networkId = dat.readInt();
+        modEntityId = dat.readInt();
+        entityId = dat.readInt();
+        rawX = dat.readInt();
+        rawY = dat.readInt();
+        rawZ = dat.readInt();
+        scaledX = rawX / 32D;
+        scaledY = rawY / 32D;
+        scaledZ = rawZ / 32D;
+        scaledYaw = dat.readByte() * 360F / 256F;
+        scaledPitch = dat.readByte() * 360F / 256F;
+        scaledHeadYaw = dat.readByte() * 360F / 256F;
         ByteArrayInputStream bis = new ByteArrayInputStream(data, 27, data.length - 27);
         DataInputStream dis = new DataInputStream(bis);
-
-        try {
-            this.metadata = DataTracker.method_2695(dis);
-        } catch (Exception var6) {
+        try
+        {
+            metadata = DataWatcher.func_75686_a(dis);
         }
-
+        catch (IOException e)
+        {
+            // Nope
+        }
         dat.skipBytes(data.length - bis.available() - 27);
-        this.throwerId = dat.readInt();
-        if (this.throwerId != 0) {
-            this.speedScaledX = (double)dat.readInt() / 8000.0;
-            this.speedScaledY = (double)dat.readInt() / 8000.0;
-            this.speedScaledZ = (double)dat.readInt() / 8000.0;
+        throwerId = dat.readInt();
+        if (throwerId != 0)
+        {
+            speedScaledX = dat.readInt() / 8000D;
+            speedScaledY = dat.readInt() / 8000D;
+            speedScaledZ = dat.readInt() / 8000D;
         }
 
         this.dataStream = dat;
         return this;
     }
 
-    public void execute(Connection network, FMLNetworkHandler handler, PacketListener netHandler, String userName) {
-        NetworkModHandler nmh = handler.findNetworkModHandler(this.networkId);
+    @Override
+    public void execute(INetworkManager network, FMLNetworkHandler handler, NetHandler netHandler, String userName)
+    {
+        NetworkModHandler nmh = handler.findNetworkModHandler(networkId);
         ModContainer mc = nmh.getContainer();
-        EntityRegistry.EntityRegistration registration = EntityRegistry.instance().lookupModSpawn(mc, this.modEntityId);
-        Class<? extends Entity> cls = registration.getEntityClass();
-        if (cls == null) {
-            FMLLog.log(Level.WARNING, "Missing mod entity information for %s : %d", mc.getModId(), this.modEntityId);
-        } else {
-            FMLCommonHandler.instance().spawnEntityIntoClientWorld(registration, this);
+
+        EntityRegistration registration = EntityRegistry.instance().lookupModSpawn(mc, modEntityId);
+        if (registration == null || registration.getEntityClass() == null)
+        {
+            FMLLog.log(Level.WARNING, "Missing mod entity information for %s : %d", mc.getModId(), modEntityId);
+            return;
         }
+
+
+        Entity entity = FMLCommonHandler.instance().spawnEntityIntoClientWorld(registration, this);
     }
+
 }

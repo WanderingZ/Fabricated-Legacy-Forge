@@ -1,46 +1,73 @@
+/*
+ * Forge Mod Loader
+ * Copyright (c) 2012-2013 cpw.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the GNU Lesser Public License v2.1
+ * which accompanies this distribution, and is available at
+ * http://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ * 
+ * Contributors:
+ *     cpw - implementation
+ */
+
 package cpw.mods.fml.common.modloader;
 
+import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.network.INetworkManager;
+import net.minecraft.network.NetLoginHandler;
+import net.minecraft.network.packet.NetHandler;
+import net.minecraft.network.packet.Packet1Login;
+import net.minecraft.server.MinecraftServer;
 import cpw.mods.fml.common.network.IConnectionHandler;
 import cpw.mods.fml.common.network.Player;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.network.Connection;
-import net.minecraft.network.PendingConnection;
-import net.minecraft.network.class_690;
-import net.minecraft.network.listener.PacketListener;
-import net.minecraft.server.MinecraftServer;
 
-public class ModLoaderConnectionHandler implements IConnectionHandler {
+public class ModLoaderConnectionHandler implements IConnectionHandler
+{
     private BaseModProxy mod;
 
-    public ModLoaderConnectionHandler(BaseModProxy mod) {
+    public ModLoaderConnectionHandler(BaseModProxy mod)
+    {
         this.mod = mod;
     }
 
-    public void playerLoggedIn(Player player, PacketListener netHandler, Connection manager) {
-        this.mod.onClientLogin((PlayerEntity)player);
+    @Override
+    public void playerLoggedIn(Player player, NetHandler netHandler, INetworkManager manager)
+    {
+        mod.onClientLogin((EntityPlayer)player);
     }
 
-    public String connectionReceived(PendingConnection netHandler, Connection manager) {
+    @Override
+    public String connectionReceived(NetLoginHandler netHandler, INetworkManager manager)
+    {
         return null;
     }
 
-    public void connectionOpened(PacketListener netClientHandler, String server, int port, Connection manager) {
-        ModLoaderHelper.sidedHelper.clientConnectionOpened(netClientHandler, manager, this.mod);
+    @Override
+    public void connectionOpened(NetHandler netClientHandler, String server, int port, INetworkManager manager)
+    {
+        ModLoaderHelper.sidedHelper.clientConnectionOpened(netClientHandler, manager, mod);
     }
 
-    public void connectionClosed(Connection manager) {
-        if (!ModLoaderHelper.sidedHelper.clientConnectionClosed(manager, this.mod)) {
-            this.mod.serverDisconnect();
-            this.mod.onClientLogout(manager);
+    @Override
+    public void connectionClosed(INetworkManager manager)
+    {
+        if (ModLoaderHelper.sidedHelper==null || !ModLoaderHelper.sidedHelper.clientConnectionClosed(manager, mod))
+        {
+            mod.serverDisconnect();
+            mod.onClientLogout(manager);
         }
-
     }
 
-    public void clientLoggedIn(PacketListener nh, Connection manager, class_690 login) {
-        this.mod.serverConnect(nh);
+    @Override
+    public void clientLoggedIn(NetHandler nh, INetworkManager manager, Packet1Login login)
+    {
+        mod.serverConnect(nh);
     }
 
-    public void connectionOpened(PacketListener netClientHandler, MinecraftServer server, Connection manager) {
-        ModLoaderHelper.sidedHelper.clientConnectionOpened(netClientHandler, manager, this.mod);
+    @Override
+    public void connectionOpened(NetHandler netClientHandler, MinecraftServer server, INetworkManager manager)
+    {
+        ModLoaderHelper.sidedHelper.clientConnectionOpened(netClientHandler, manager, mod);
     }
+
 }

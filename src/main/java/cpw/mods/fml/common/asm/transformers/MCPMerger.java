@@ -1,10 +1,40 @@
+/*
+ * Forge Mod Loader
+ * Copyright (c) 2012-2013 cpw.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the GNU Lesser Public License v2.1
+ * which accompanies this distribution, and is available at
+ * http://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ * 
+ * Contributors:
+ *     cpw - implementation
+ */
+
 package cpw.mods.fml.common.asm.transformers;
 
-import com.google.common.base.Objects;
-import com.google.common.collect.Lists;
-import com.google.common.collect.Sets;
-import cpw.mods.fml.common.Side;
-import cpw.mods.fml.common.asm.SideOnly;
+import java.io.BufferedOutputStream;
+import java.io.BufferedReader;
+import java.io.ByteArrayOutputStream;
+import java.io.DataInputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Enumeration;
+import java.util.HashSet;
+import java.util.Hashtable;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map.Entry;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipFile;
+import java.util.zip.ZipOutputStream;
+
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.Type;
@@ -13,26 +43,28 @@ import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.FieldNode;
 import org.objectweb.asm.tree.MethodNode;
 
-import java.io.*;
-import java.util.*;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipFile;
-import java.util.zip.ZipOutputStream;
+import com.google.common.base.Objects;
+import com.google.common.collect.Lists;
+import com.google.common.collect.Sets;
 
-public class MCPMerger {
-    private static Hashtable<String, MCPMerger.ClassInfo> clients = new Hashtable();
-    private static Hashtable<String, MCPMerger.ClassInfo> shared = new Hashtable();
-    private static Hashtable<String, MCPMerger.ClassInfo> servers = new Hashtable();
-    private static HashSet<String> copyToServer = new HashSet();
-    private static HashSet<String> copyToClient = new HashSet();
+import cpw.mods.fml.relauncher.Side;
+import cpw.mods.fml.relauncher.SideOnly;
+
+public class MCPMerger
+{
+    private static Hashtable<String, ClassInfo> clients = new Hashtable<String, ClassInfo>();
+    private static Hashtable<String, ClassInfo> shared  = new Hashtable<String, ClassInfo>();
+    private static Hashtable<String, ClassInfo> servers = new Hashtable<String, ClassInfo>();
+    private static HashSet<String> copyToServer = new HashSet<String>();
+    private static HashSet<String> copyToClient = new HashSet<String>();
+    private static HashSet<String> dontAnnotate = new HashSet<String>();
     private static final boolean DEBUG = false;
 
-    public MCPMerger() {
-    }
-
-    public static void main(String[] args) {
-        if (args.length != 3) {
-            System.out.println("Usage: AccessTransformer <MapFile> <minecraft.jar> <minecraft_server.jar>");
+    public static void main(String[] args)
+    {
+        if (args.length != 3)
+        {
+            System.out.println("Usage: MCPMerger <MapFile> <minecraft.jar> <minecraft_server.jar>");
             System.exit(1);
         }
 
@@ -41,82 +73,104 @@ public class MCPMerger {
         File server_jar = new File(args[2]);
         File client_jar_tmp = new File(args[1] + ".MergeBack");
         File server_jar_tmp = new File(args[2] + ".MergeBack");
-        if (client_jar_tmp.exists() && !client_jar_tmp.delete()) {
+
+
+        if (client_jar_tmp.exists() && !client_jar_tmp.delete())
+        {
             System.out.println("Could not delete temp file: " + client_jar_tmp);
         }
 
-        if (server_jar_tmp.exists() && !server_jar_tmp.delete()) {
+        if (server_jar_tmp.exists() && !server_jar_tmp.delete())
+        {
             System.out.println("Could not delete temp file: " + server_jar_tmp);
         }
 
-        if (!client_jar.exists()) {
+        if (!client_jar.exists())
+        {
             System.out.println("Could not find minecraft.jar: " + client_jar);
             System.exit(1);
         }
 
-        if (!server_jar.exists()) {
+        if (!server_jar.exists())
+        {
             System.out.println("Could not find minecraft_server.jar: " + server_jar);
             System.exit(1);
         }
 
-        if (!client_jar.renameTo(client_jar_tmp)) {
+        if (!client_jar.renameTo(client_jar_tmp))
+        {
             System.out.println("Could not rename file: " + client_jar + " -> " + client_jar_tmp);
             System.exit(1);
         }
 
-        if (!server_jar.renameTo(server_jar_tmp)) {
+        if (!server_jar.renameTo(server_jar_tmp))
+        {
             System.out.println("Could not rename file: " + server_jar + " -> " + server_jar_tmp);
             System.exit(1);
         }
 
-        if (!readMapFile(map_file)) {
+        if (!readMapFile(map_file))
+        {
             System.out.println("Could not read map file: " + map_file);
             System.exit(1);
         }
 
-        try {
+        try
+        {
             processJar(client_jar_tmp, server_jar_tmp, client_jar, server_jar);
-        } catch (IOException var7) {
-            var7.printStackTrace();
+        }
+        catch (IOException e)
+        {
+            e.printStackTrace();
             System.exit(1);
         }
 
-        if (!client_jar_tmp.delete()) {
+        if (!client_jar_tmp.delete())
+        {
             System.out.println("Could not delete temp file: " + client_jar_tmp);
         }
 
-        if (!server_jar_tmp.delete()) {
+        if (!server_jar_tmp.delete())
+        {
             System.out.println("Could not delete temp file: " + server_jar_tmp);
         }
-
     }
 
-    private static boolean readMapFile(File mapFile) {
-        try {
+    private static boolean readMapFile(File mapFile)
+    {
+        try
+        {
             FileInputStream fstream = new FileInputStream(mapFile);
             DataInputStream in = new DataInputStream(fstream);
             BufferedReader br = new BufferedReader(new InputStreamReader(in));
 
             String line;
-            while((line = br.readLine()) != null) {
-                boolean toClient = line.charAt(0) == '<';
-                line = line.substring(1);
-                if (toClient) {
-                    copyToClient.add(line);
-                } else {
-                    copyToServer.add(line);
+            while ((line = br.readLine()) != null)
+            {
+                line = line.split("#")[0];
+                char cmd = line.charAt(0);
+                line = line.substring(1).trim();
+                
+                switch (cmd)
+                {
+                    case '!': dontAnnotate.add(line); break;
+                    case '<': copyToClient.add(line); break;
+                    case '>': copyToServer.add(line); break; 
                 }
             }
 
             in.close();
             return true;
-        } catch (Exception var6) {
-            System.err.println("Error: " + var6.getMessage());
+        }
+        catch (Exception e)
+        {
+            System.err.println("Error: " + e.getMessage());
             return false;
         }
     }
 
-    public static void processJar(File clientInFile, File serverInFile, File clientOutFile, File serverOutFile) throws IOException {
+    public static void processJar(File clientInFile, File serverInFile, File clientOutFile, File serverOutFile) throws IOException
+    {
         ZipFile cInJar = null;
         ZipFile sInJar = null;
         ZipOutputStream cOutJar = null;
@@ -147,7 +201,7 @@ public class MCPMerger {
             HashSet<String> cAdded = new HashSet<String>();
             HashSet<String> sAdded = new HashSet<String>();
 
-            for (Map.Entry<String, ZipEntry> entry : cClasses.entrySet())
+            for (Entry<String, ZipEntry> entry : cClasses.entrySet())
             {
                 String name = entry.getKey();
                 ZipEntry cEntry = entry.getValue();
@@ -189,20 +243,14 @@ public class MCPMerger {
                 cAdded.add(name);
                 sAdded.add(name);
             }
-            for (Map.Entry<String, ZipEntry> entry : sClasses.entrySet())
+
+            for (Entry<String, ZipEntry> entry : sClasses.entrySet())
             {
-                if (!copyToClient.contains(entry.getKey()))
+                if (DEBUG)
                 {
-                    copyClass(sInJar, entry.getValue(), null, sOutJar, false);
+                    System.out.println("Copy class s->c : " + entry.getKey());
                 }
-                else
-                {
-                    if (DEBUG)
-                    {
-                        System.out.println("Copy class s->c : " + entry.getKey());
-                    }
-                    copyClass(sInJar, entry.getValue(), cOutJar, sOutJar, false);
-                }
+                copyClass(sInJar, entry.getValue(), cOutJar, sOutJar, false);
             }
 
             for (String name : new String[]{SideOnly.class.getName(), Side.class.getName()})
@@ -246,43 +294,48 @@ public class MCPMerger {
         }
     }
 
-    private static void copyClass(ZipFile inJar, ZipEntry entry, ZipOutputStream outJar, ZipOutputStream outJar2, boolean isClientOnly) throws IOException {
+    private static void copyClass(ZipFile inJar, ZipEntry entry, ZipOutputStream outJar, ZipOutputStream outJar2, boolean isClientOnly) throws IOException
+    {
         ClassReader reader = new ClassReader(readEntry(inJar, entry));
         ClassNode classNode = new ClassNode();
-        reader.accept(classNode, 0);
-        if (!classNode.name.equals("ayn")) {
-            if (classNode.visibleAnnotations == null) {
-                classNode.visibleAnnotations = new ArrayList();
-            }
 
+        reader.accept(classNode, 0);
+
+        if (!dontAnnotate.contains(classNode.name))
+        {
+            if (classNode.visibleAnnotations == null) classNode.visibleAnnotations = new ArrayList<AnnotationNode>();
             classNode.visibleAnnotations.add(getSideAnn(isClientOnly));
         }
 
-        ClassWriter writer = new ClassWriter(1);
+        ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_MAXS);
         classNode.accept(writer);
         byte[] data = writer.toByteArray();
+
         ZipEntry newEntry = new ZipEntry(entry.getName());
-        if (outJar != null) {
+        if (outJar != null)
+        {
             outJar.putNextEntry(newEntry);
             outJar.write(data);
         }
-
-        if (outJar2 != null) {
+        if (outJar2 != null)
+        {
             outJar2.putNextEntry(newEntry);
             outJar2.write(data);
         }
-
     }
 
-    private static AnnotationNode getSideAnn(boolean isClientOnly) {
+    private static AnnotationNode getSideAnn(boolean isClientOnly)
+    {
         AnnotationNode ann = new AnnotationNode(Type.getDescriptor(SideOnly.class));
-        ann.values = new ArrayList();
+        ann.values = new ArrayList<Object>();
         ann.values.add("value");
-        ann.values.add(new String[]{Type.getDescriptor(Side.class), isClientOnly ? "CLIENT" : "SERVER"});
+        ann.values.add(new String[]{ Type.getDescriptor(Side.class), (isClientOnly ? "CLIENT" : "SERVER")});
         return ann;
     }
 
-    private static Hashtable<String, ZipEntry> getClassEntries(ZipFile inFile, ZipOutputStream outFile) throws IOException {
+    @SuppressWarnings("unchecked")
+    private static Hashtable<String, ZipEntry> getClassEntries(ZipFile inFile, ZipOutputStream outFile) throws IOException
+    {
         Hashtable<String, ZipEntry> ret = new Hashtable<String, ZipEntry>();
         for (ZipEntry entry : Collections.list((Enumeration<ZipEntry>)inFile.entries()))
         {
@@ -305,44 +358,61 @@ public class MCPMerger {
         }
         return ret;
     }
-
-    private static byte[] readEntry(ZipFile inFile, ZipEntry entry) throws IOException {
+    private static byte[] readEntry(ZipFile inFile, ZipEntry entry) throws IOException
+    {
         return readFully(inFile.getInputStream(entry));
     }
-
-    private static byte[] readFully(InputStream stream) throws IOException {
+    private static byte[] readFully(InputStream stream) throws IOException
+    {
         byte[] data = new byte[4096];
         ByteArrayOutputStream entryBuffer = new ByteArrayOutputStream();
-
         int len;
-        do {
+        do
+        {
             len = stream.read(data);
-            if (len > 0) {
+            if (len > 0)
+            {
                 entryBuffer.write(data, 0, len);
             }
-        } while(len != -1);
+        } while (len != -1);
 
         return entryBuffer.toByteArray();
     }
+    private static class ClassInfo
+    {
+        public String name;
+        public ArrayList<FieldNode> cField = new ArrayList<FieldNode>();
+        public ArrayList<FieldNode> sField = new ArrayList<FieldNode>();
+        public ArrayList<MethodNode> cMethods = new ArrayList<MethodNode>();
+        public ArrayList<MethodNode> sMethods = new ArrayList<MethodNode>();
+        public ClassInfo(String name){ this.name = name; }
+        public boolean isSame() { return (cField.size() == 0 && sField.size() == 0 && cMethods.size() == 0 && sMethods.size() == 0); }
+    }
 
-    public static byte[] processClass(byte[] cIn, byte[] sIn, MCPMerger.ClassInfo info) {
+    public static byte[] processClass(byte[] cIn, byte[] sIn, ClassInfo info)
+    {
         ClassNode cClassNode = getClassNode(cIn);
         ClassNode sClassNode = getClassNode(sIn);
+
         processFields(cClassNode, sClassNode, info);
         processMethods(cClassNode, sClassNode, info);
-        ClassWriter writer = new ClassWriter(1);
+
+        ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_MAXS);
         cClassNode.accept(writer);
         return writer.toByteArray();
     }
 
-    private static ClassNode getClassNode(byte[] data) {
+    private static ClassNode getClassNode(byte[] data)
+    {
         ClassReader reader = new ClassReader(data);
         ClassNode classNode = new ClassNode();
         reader.accept(classNode, 0);
         return classNode;
     }
 
-    private static void processFields(ClassNode cClass, ClassNode sClass, MCPMerger.ClassInfo info) {
+    @SuppressWarnings("unchecked")
+    private static void processFields(ClassNode cClass, ClassNode sClass, ClassInfo info)
+    {
         List<FieldNode> cFields = cClass.fields;
         List<FieldNode> sFields = sClass.fields;
 
@@ -414,7 +484,49 @@ public class MCPMerger {
         }
     }
 
-    private static void processMethods(ClassNode cClass, ClassNode sClass, MCPMerger.ClassInfo info) {
+    private static class MethodWrapper
+    {
+        private MethodNode node;
+        public boolean client;
+        public boolean server;
+        public MethodWrapper(MethodNode node)
+        {
+            this.node = node;
+        }
+        @Override
+        public boolean equals(Object obj)
+        {
+            if (obj == null || !(obj instanceof MethodWrapper)) return false;
+            MethodWrapper mw = (MethodWrapper) obj;
+            boolean eq = Objects.equal(node.name, mw.node.name) && Objects.equal(node.desc, mw.node.desc);
+            if (eq)
+            {
+                mw.client = this.client | mw.client;
+                mw.server = this.server | mw.server;
+                this.client = this.client | mw.client;
+                this.server = this.server | mw.server;
+                if (DEBUG)
+                {
+                    System.out.printf(" eq: %s %s\n", this, mw);
+                }
+            }
+            return eq;
+        }
+
+        @Override
+        public int hashCode()
+        {
+            return Objects.hashCode(node.name, node.desc);
+        }
+        @Override
+        public String toString()
+        {
+            return Objects.toStringHelper(this).add("name", node.name).add("desc",node.desc).add("server",server).add("client",client).toString();
+        }
+    }
+    @SuppressWarnings("unchecked")
+    private static void processMethods(ClassNode cClass, ClassNode sClass, ClassInfo info)
+    {
         List<MethodNode> cMethods = (List<MethodNode>)cClass.methods;
         List<MethodNode> sMethods = (List<MethodNode>)sClass.methods;
         LinkedHashSet<MethodWrapper> allMethods = Sets.newLinkedHashSet();
@@ -514,74 +626,24 @@ public class MCPMerger {
         }
     }
 
-    public static byte[] getClassBytes(String name) throws IOException {
+    public static byte[] getClassBytes(String name) throws IOException
+    {
         InputStream classStream = null;
-
-        byte[] var2;
-        try {
+        try
+        {
             classStream = MCPMerger.class.getResourceAsStream("/" + name.replace('.', '/').concat(".class"));
-            var2 = readFully(classStream);
-        } finally {
-            if (classStream != null) {
-                try {
+            return readFully(classStream);
+        }
+        finally
+        {
+            if (classStream != null)
+            {
+                try
+                {
                     classStream.close();
-                } catch (IOException var9) {
                 }
+                catch (IOException e){}
             }
-
-        }
-
-        return var2;
-    }
-
-    private static class MethodWrapper {
-        private MethodNode node;
-        public boolean client;
-        public boolean server;
-
-        public MethodWrapper(MethodNode node) {
-            this.node = node;
-        }
-
-        public boolean equals(Object obj) {
-            if (obj != null && obj instanceof MCPMerger.MethodWrapper) {
-                MCPMerger.MethodWrapper mw = (MCPMerger.MethodWrapper)obj;
-                boolean eq = com.google.common.base.Objects.equal(this.node.name, mw.node.name) && com.google.common.base.Objects.equal(this.node.desc, mw.node.desc);
-                if (eq) {
-                    mw.client |= this.client;
-                    mw.server |= this.server;
-                    this.client |= mw.client;
-                    this.server |= mw.server;
-                }
-
-                return eq;
-            } else {
-                return false;
-            }
-        }
-
-        public int hashCode() {
-            return com.google.common.base.Objects.hashCode(new Object[]{this.node.name, this.node.desc});
-        }
-
-        public String toString() {
-            return Objects.toStringHelper(this).add("name", this.node.name).add("desc", this.node.desc).add("server", this.server).add("client", this.client).toString();
-        }
-    }
-
-    private static class ClassInfo {
-        public String name;
-        public ArrayList<FieldNode> cField = new ArrayList();
-        public ArrayList<FieldNode> sField = new ArrayList();
-        public ArrayList<MethodNode> cMethods = new ArrayList();
-        public ArrayList<MethodNode> sMethods = new ArrayList();
-
-        public ClassInfo(String name) {
-            this.name = name;
-        }
-
-        public boolean isSame() {
-            return this.cField.size() == 0 && this.sField.size() == 0 && this.cMethods.size() == 0 && this.sMethods.size() == 0;
         }
     }
 }

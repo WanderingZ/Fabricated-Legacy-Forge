@@ -1,29 +1,43 @@
 package net.minecraftforge.classloading;
 
-import cpw.mods.fml.relauncher.IFMLLoadingPlugin;
-
 import java.util.Map;
 
-public class FMLForgePlugin implements IFMLLoadingPlugin {
-    public FMLForgePlugin() {
-    }
+import cpw.mods.fml.relauncher.IFMLLoadingPlugin;
 
-    public String[] getLibraryRequestClass() {
+public class FMLForgePlugin implements IFMLLoadingPlugin
+{
+    public static boolean RUNTIME_DEOBF = false;
+
+    @Override
+    public String[] getLibraryRequestClass()
+    {
         return null;
     }
 
-    public String[] getASMTransformerClass() {
-        return new String[]{"net.minecraftforge.transformers.ForgeAccessTransformer", "net.minecraftforge.transformers.EventTransformer"};
+    @Override
+    public String[] getASMTransformerClass()
+    {
+        return new String[]{ 
+                                "net.minecraftforge.transformers.ForgeAccessTransformer",
+                                "net.minecraftforge.transformers.EventTransformer"
+                           };
     }
 
-    public String getModContainerClass() {
+    @Override
+    public String getModContainerClass()
+    {
         return "net.minecraftforge.common.ForgeDummyContainer";
     }
 
-    public String getSetupClass() {
+    @Override
+    public String getSetupClass()
+    {
         return null;
     }
 
-    public void injectData(Map<String, Object> data) {
+    @Override
+    public void injectData(Map<String, Object> data)
+    {
+        RUNTIME_DEOBF = (Boolean)data.get("runtimeDeobfuscationEnabled");
     }
 }

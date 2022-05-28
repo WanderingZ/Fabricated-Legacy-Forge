@@ -1,42 +1,48 @@
 package net.minecraftforge.event.entity.player;
 
 import net.minecraft.block.Block;
-import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.entity.Entity;
+import net.minecraft.entity.player.EntityPlayer;
 import net.minecraftforge.event.Cancelable;
 import net.minecraftforge.event.entity.living.LivingEvent;
 
-public class PlayerEvent extends LivingEvent {
-    public final PlayerEntity entityPlayer;
-
-    public PlayerEvent(PlayerEntity player) {
+public class PlayerEvent extends LivingEvent
+{
+    public final EntityPlayer entityPlayer;
+    public PlayerEvent(EntityPlayer player)
+    {
         super(player);
-        this.entityPlayer = player;
+        entityPlayer = player;
+    }
+    
+    public static class HarvestCheck extends PlayerEvent
+    {
+        public final Block block;
+        public boolean success;
+
+        public HarvestCheck(EntityPlayer player, Block block, boolean success)
+        {
+            super(player);
+            this.block = block;
+            this.success = success;
+        }
     }
 
     @Cancelable
-    public static class BreakSpeed extends PlayerEvent {
+    public static class BreakSpeed extends PlayerEvent
+    {
         public final Block block;
         public final int metadata;
         public final float originalSpeed;
-        public float newSpeed = 0.0F;
+        public float newSpeed = 0.0f;
 
-        public BreakSpeed(PlayerEntity player, Block block, int metadata, float original) {
+        public BreakSpeed(EntityPlayer player, Block block, int metadata, float original)
+        {
             super(player);
             this.block = block;
             this.metadata = metadata;
             this.originalSpeed = original;
             this.newSpeed = original;
-        }
-    }
-
-    public static class HarvestCheck extends PlayerEvent {
-        public final Block block;
-        public boolean success;
-
-        public HarvestCheck(PlayerEntity player, Block block, boolean success) {
-            super(player);
-            this.block = block;
-            this.success = success;
         }
     }
 }

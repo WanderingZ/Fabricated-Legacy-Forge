@@ -1,101 +1,171 @@
+/*
+ * Forge Mod Loader
+ * Copyright (c) 2012-2013 cpw.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the GNU Lesser Public License v2.1
+ * which accompanies this distribution, and is available at
+ * http://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * Contributors:
+ *     cpw - implementation
+ */
+
 package cpw.mods.fml.common;
 
-import com.google.common.eventbus.EventBus;
-import cpw.mods.fml.common.versioning.ArtifactVersion;
-import cpw.mods.fml.common.versioning.DefaultArtifactVersion;
-import cpw.mods.fml.common.versioning.VersionRange;
-
 import java.io.File;
+import java.security.cert.Certificate;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 
-public class DummyModContainer implements ModContainer {
+import com.google.common.eventbus.EventBus;
+
+import cpw.mods.fml.common.versioning.ArtifactVersion;
+import cpw.mods.fml.common.versioning.DefaultArtifactVersion;
+import cpw.mods.fml.common.versioning.VersionRange;
+
+public class DummyModContainer implements ModContainer
+{
     private ModMetadata md;
     private ArtifactVersion processedVersion;
+    private String label;
 
-    public DummyModContainer(ModMetadata md) {
+    public DummyModContainer(ModMetadata md)
+    {
         this.md = md;
     }
 
-    public DummyModContainer() {
+    public DummyModContainer(String label)
+    {
+        this.label = label;
+    }
+    public DummyModContainer()
+    {
     }
 
-    public void bindMetadata(MetadataCollection mc) {
+    @Override
+    public void bindMetadata(MetadataCollection mc)
+    {
     }
 
-    public List<ArtifactVersion> getDependants() {
+    @Override
+    public List<ArtifactVersion> getDependants()
+    {
         return Collections.emptyList();
     }
 
-    public List<ArtifactVersion> getDependencies() {
+    @Override
+    public List<ArtifactVersion> getDependencies()
+    {
         return Collections.emptyList();
     }
 
-    public Set<ArtifactVersion> getRequirements() {
+    @Override
+    public Set<ArtifactVersion> getRequirements()
+    {
         return Collections.emptySet();
     }
 
-    public ModMetadata getMetadata() {
-        return this.md;
+    @Override
+    public ModMetadata getMetadata()
+    {
+        return md;
     }
 
-    public Object getMod() {
+    @Override
+    public Object getMod()
+    {
         return null;
     }
 
-    public String getModId() {
-        return this.md.modId;
+    @Override
+    public String getModId()
+    {
+        return md.modId;
     }
 
-    public String getName() {
-        return this.md.name;
+    @Override
+    public String getName()
+    {
+        return md.name;
     }
 
-    public String getSortingRules() {
+    @Override
+    public String getSortingRules()
+    {
         return "";
     }
 
-    public File getSource() {
+    @Override
+    public File getSource()
+    {
         return null;
     }
 
-    public String getVersion() {
-        return this.md.version;
+    @Override
+    public String getVersion()
+    {
+        return md.version;
     }
 
-    public boolean matches(Object mod) {
+    public boolean matches(Object mod)
+    {
         return false;
     }
 
-    public void setEnabledState(boolean enabled) {
+    @Override
+    public void setEnabledState(boolean enabled)
+    {
     }
 
-    public boolean registerBus(EventBus bus, LoadController controller) {
+    @Override
+    public boolean registerBus(EventBus bus, LoadController controller)
+    {
         return false;
     }
 
-    public ArtifactVersion getProcessedVersion() {
-        if (this.processedVersion == null) {
-            this.processedVersion = new DefaultArtifactVersion(this.getModId(), this.getVersion());
+    @Override
+    public ArtifactVersion getProcessedVersion()
+    {
+        if (processedVersion == null)
+        {
+            processedVersion = new DefaultArtifactVersion(getModId(), getVersion());
         }
-
-        return this.processedVersion;
+        return processedVersion;
     }
 
-    public boolean isImmutable() {
+    @Override
+    public boolean isImmutable()
+    {
         return false;
     }
 
-    public boolean isNetworkMod() {
+    @Override
+    public boolean isNetworkMod()
+    {
         return false;
     }
 
-    public String getDisplayVersion() {
-        return this.md.version;
+    @Override
+    public String getDisplayVersion()
+    {
+        return md.version;
     }
-
-    public VersionRange acceptableMinecraftVersionRange() {
+    @Override
+    public VersionRange acceptableMinecraftVersionRange()
+    {
         return Loader.instance().getMinecraftModContainer().getStaticVersionRange();
+    }
+
+    @Override
+    public Certificate getSigningCertificate()
+    {
+        return null;
+    }
+
+    @Override
+    public String toString()
+    {
+        return md != null ? getModId() : "Dummy Container ("+label+") @" + System.identityHashCode(this);
     }
 }

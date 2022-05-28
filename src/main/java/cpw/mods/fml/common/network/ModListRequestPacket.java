@@ -1,33 +1,52 @@
+/*
+ * Forge Mod Loader
+ * Copyright (c) 2012-2013 cpw.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the GNU Lesser Public License v2.1
+ * which accompanies this distribution, and is available at
+ * http://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ * 
+ * Contributors:
+ *     cpw - implementation
+ */
+
 package cpw.mods.fml.common.network;
+
+import static cpw.mods.fml.common.network.FMLPacket.Type.MOD_LIST_REQUEST;
+import static cpw.mods.fml.common.network.FMLPacket.Type.MOD_LIST_RESPONSE;
+
+import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Set;
+
+import net.minecraft.network.INetworkManager;
+import net.minecraft.network.packet.NetHandler;
 
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.io.ByteArrayDataInput;
 import com.google.common.io.ByteArrayDataOutput;
 import com.google.common.io.ByteStreams;
+
 import cpw.mods.fml.common.FMLCommonHandler;
 import cpw.mods.fml.common.FMLLog;
 import cpw.mods.fml.common.Loader;
 import cpw.mods.fml.common.ModContainer;
-import net.minecraft.network.Connection;
-import net.minecraft.network.listener.PacketListener;
 
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-
-import static cpw.mods.fml.common.network.FMLPacket.Type.MOD_LIST_RESPONSE;
-
-public class ModListRequestPacket extends FMLPacket {
+public class ModListRequestPacket extends FMLPacket
+{
     private List<String> sentModList;
     private byte compatibilityLevel;
 
-    public ModListRequestPacket() {
-        super(Type.MOD_LIST_REQUEST);
+    public ModListRequestPacket()
+    {
+        super(MOD_LIST_REQUEST);
     }
 
-    public byte[] generatePacket(Object... data) {
+    @Override
+    public byte[] generatePacket(Object... data)
+    {
         ByteArrayDataOutput dat = ByteStreams.newDataOutput();
         Set<ModContainer> activeMods = FMLNetworkHandler.instance().getNetworkModList();
         dat.writeInt(activeMods.size());
@@ -39,25 +58,37 @@ public class ModListRequestPacket extends FMLPacket {
         return dat.toByteArray();
     }
 
-    public FMLPacket consumePacket(byte[] data) {
-        this.sentModList = Lists.newArrayList();
+    @Override
+    public FMLPacket consumePacket(byte[] data)
+    {
+        sentModList = Lists.newArrayList();
         ByteArrayDataInput in = ByteStreams.newDataInput(data);
         int listSize = in.readInt();
-
-        for(int i = 0; i < listSize; ++i) {
-            this.sentModList.add(in.readUTF());
+        for (int i = 0; i < listSize; i++)
+        {
+            sentModList.add(in.readUTF());
         }
-
-        try {
-            this.compatibilityLevel = in.readByte();
-        } catch (IllegalStateException var5) {
-            FMLLog.fine("No compatibility byte found - the server is too old", new Object[0]);
+        try
+        {
+            compatibilityLevel = in.readByte();
         }
-
+        catch (IllegalStateException e)
+        {
+            FMLLog.fine("No compatibility byte found - the server is too old");
+        }
         return this;
     }
 
-    public void execute(Connection mgr, FMLNetworkHandler handler, PacketListener netHandler, String userName) {
+    /**
+     *
+     * This packet is executed on the client to evaluate the server's mod list against
+     * the client
+     *
+     * @see cpw.mods.fml.common.network.FMLPacket#execute(INetworkManager, FMLNetworkHandler, NetHandler, String)
+     */
+    @Override
+    public void execute(INetworkManager mgr, FMLNetworkHandler handler, NetHandler netHandler, String userName)
+    {
         List<String> missingMods = Lists.newArrayList();
         Map<String,String> modVersions = Maps.newHashMap();
         Map<String, ModContainer> indexedModList = Maps.newHashMap(Loader.instance().getIndexedModList());
@@ -76,7 +107,7 @@ public class ModListRequestPacket extends FMLPacket {
 
         if (indexedModList.size()>0)
         {
-            for (Map.Entry<String, ModContainer> e : indexedModList.entrySet())
+            for (Entry<String, ModContainer> e : indexedModList.entrySet())
             {
                 if (e.getValue().isNetworkMod())
                 {
@@ -93,6 +124,6 @@ public class ModListRequestPacket extends FMLPacket {
         FMLLog.fine("The server has compatibility level %d", compatibilityLevel);
         FMLCommonHandler.instance().getSidedDelegate().setClientCompatibilityLevel(compatibilityLevel);
 
-        mgr.send(PacketDispatcher.getPacket("FML", FMLPacket.makePacket(MOD_LIST_RESPONSE, modVersions, missingMods)));
+        mgr.func_74429_a(PacketDispatcher.getPacket("FML", FMLPacket.makePacket(MOD_LIST_RESPONSE, modVersions, missingMods)));
     }
 }

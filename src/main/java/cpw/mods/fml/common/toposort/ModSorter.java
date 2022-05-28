@@ -1,28 +1,50 @@
+/*
+ * The FML Forge Mod Loader suite. Copyright (C) 2012 cpw
+ *
+ * This library is free software; you can redistribute it and/or modify it under the terms of the GNU Lesser General Public License as published by the Free
+ * Software Foundation; either version 2.1 of the License, or any later version.
+ *
+ * This library is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+ * A PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License along with this library; if not, write to the Free Software Foundation, Inc., 51
+ * Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
+ */
 package cpw.mods.fml.common.toposort;
+
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
+
+import com.google.common.collect.Lists;
 
 import cpw.mods.fml.common.DummyModContainer;
 import cpw.mods.fml.common.Loader;
 import cpw.mods.fml.common.ModContainer;
+import cpw.mods.fml.common.toposort.TopologicalSort.DirectedGraph;
 import cpw.mods.fml.common.versioning.ArtifactVersion;
 
-import java.util.Arrays;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
+/**
+ * @author cpw
+ *
+ */
+public class ModSorter
+{
+    private DirectedGraph<ModContainer> modGraph;
 
-public class ModSorter {
-    private TopologicalSort.DirectedGraph<ModContainer> modGraph;
-    private ModContainer beforeAll = new DummyModContainer();
-    private ModContainer afterAll = new DummyModContainer();
-    private ModContainer before = new DummyModContainer();
-    private ModContainer after = new DummyModContainer();
+    private ModContainer beforeAll = new DummyModContainer("BeforeAll");
+    private ModContainer afterAll = new DummyModContainer("AfterAll");
+    private ModContainer before = new DummyModContainer("Before");
+    private ModContainer after = new DummyModContainer("After");
 
-    public ModSorter(List<ModContainer> modList, Map<String, ModContainer> nameLookup) {
-        this.buildGraph(modList, nameLookup);
+    public ModSorter(List<ModContainer> modList, Map<String, ModContainer> nameLookup)
+    {
+        buildGraph(modList, nameLookup);
     }
 
-    private void buildGraph(List<ModContainer> modList, Map<String, ModContainer> nameLookup) {
-        modGraph = new TopologicalSort.DirectedGraph<ModContainer>();
+    private void buildGraph(List<ModContainer> modList, Map<String, ModContainer> nameLookup)
+    {
+        modGraph = new DirectedGraph<ModContainer>();
         modGraph.addNode(beforeAll);
         modGraph.addNode(before);
         modGraph.addNode(afterAll);
@@ -102,9 +124,10 @@ public class ModSorter {
         }
     }
 
-    public List<ModContainer> sort() {
-        List<ModContainer> sortedList = TopologicalSort.topologicalSort(this.modGraph);
-        sortedList.removeAll(Arrays.asList(this.beforeAll, this.before, this.after, this.afterAll));
+    public List<ModContainer> sort()
+    {
+        List<ModContainer> sortedList = TopologicalSort.topologicalSort(modGraph);
+        sortedList.removeAll(Arrays.asList(new ModContainer[] {beforeAll, before, after, afterAll}));
         return sortedList;
     }
 }

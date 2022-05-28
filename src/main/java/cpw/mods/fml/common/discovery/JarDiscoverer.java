@@ -1,23 +1,38 @@
+/*
+ * Forge Mod Loader
+ * Copyright (c) 2012-2013 cpw.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the GNU Lesser Public License v2.1
+ * which accompanies this distribution, and is available at
+ * http://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ * 
+ * Contributors:
+ *     cpw - implementation
+ */
+
 package cpw.mods.fml.common.discovery;
 
-import com.google.common.collect.Lists;
-import cpw.mods.fml.common.*;
-import cpw.mods.fml.common.discovery.asm.ASMModParser;
-
-import java.io.InputStream;
 import java.util.Collections;
-import java.util.Iterator;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.regex.Matcher;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
-public class JarDiscoverer implements ITypeDiscoverer {
-    public JarDiscoverer() {
-    }
+import com.google.common.collect.Lists;
 
-    public List<ModContainer> discover(ModCandidate candidate, ASMDataTable table) {
+import cpw.mods.fml.common.FMLLog;
+import cpw.mods.fml.common.LoaderException;
+import cpw.mods.fml.common.MetadataCollection;
+import cpw.mods.fml.common.ModContainer;
+import cpw.mods.fml.common.ModContainerFactory;
+import cpw.mods.fml.common.discovery.asm.ASMModParser;
+
+public class JarDiscoverer implements ITypeDiscoverer
+{
+    @Override
+    public List<ModContainer> discover(ModCandidate candidate, ASMDataTable table)
+    {
         List<ModContainer> foundMods = Lists.newArrayList();
         FMLLog.fine("Examining file %s for potential mods", candidate.getModContainer().getName());
         ZipFile jar = null;
@@ -39,6 +54,10 @@ public class JarDiscoverer implements ITypeDiscoverer {
             }
             for (ZipEntry ze : Collections.list(jar.entries()))
             {
+                if (ze.getName()!=null && ze.getName().startsWith("__MACOSX"))
+                {
+                    continue;
+                }
                 Matcher match = classFile.matcher(ze.getName());
                 if (match.matches())
                 {
@@ -84,4 +103,5 @@ public class JarDiscoverer implements ITypeDiscoverer {
         }
         return foundMods;
     }
+
 }

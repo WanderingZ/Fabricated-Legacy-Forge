@@ -1,18 +1,16 @@
+/*
+ * The FML Forge Mod Loader suite. Copyright (C) 2012 cpw
+ *
+ * This library is free software; you can redistribute it and/or modify it under the terms of the GNU Lesser General Public License as published by the Free
+ * Software Foundation; either version 2.1 of the License, or any later version.
+ *
+ * This library is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+ * A PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License along with this library; if not, write to the Free Software Foundation, Inc., 51
+ * Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
+ */
 package cpw.mods.fml.common;
-
-import com.google.common.base.Function;
-import com.google.common.base.Strings;
-import com.google.common.base.Throwables;
-import com.google.common.collect.*;
-import com.google.common.eventbus.EventBus;
-import com.google.common.eventbus.Subscribe;
-import cpw.mods.fml.common.discovery.ASMDataTable;
-import cpw.mods.fml.common.event.*;
-import cpw.mods.fml.common.network.FMLNetworkHandler;
-import cpw.mods.fml.common.versioning.ArtifactVersion;
-import cpw.mods.fml.common.versioning.DefaultArtifactVersion;
-import cpw.mods.fml.common.versioning.VersionParser;
-import cpw.mods.fml.common.versioning.VersionRange;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -20,12 +18,60 @@ import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
-import java.util.*;
+import java.security.cert.Certificate;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
+import java.util.Set;
 import java.util.logging.Level;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
+import java.util.zip.ZipInputStream;
 
-public class FMLModContainer implements ModContainer {
+import com.google.common.base.Function;
+import com.google.common.base.Predicates;
+import com.google.common.base.Strings;
+import com.google.common.base.Throwables;
+import com.google.common.collect.ArrayListMultimap;
+import com.google.common.collect.BiMap;
+import com.google.common.collect.ImmutableBiMap;
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableList.Builder;
+import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Iterators;
+import com.google.common.collect.Lists;
+import com.google.common.collect.Multimap;
+import com.google.common.collect.SetMultimap;
+import com.google.common.collect.Sets;
+import com.google.common.eventbus.EventBus;
+import com.google.common.eventbus.Subscribe;
+
+import cpw.mods.fml.common.Mod.Instance;
+import cpw.mods.fml.common.Mod.Metadata;
+import cpw.mods.fml.common.discovery.ASMDataTable;
+import cpw.mods.fml.common.discovery.ASMDataTable.ASMData;
+import cpw.mods.fml.common.event.FMLConstructionEvent;
+import cpw.mods.fml.common.event.FMLEvent;
+import cpw.mods.fml.common.event.FMLInitializationEvent;
+import cpw.mods.fml.common.event.FMLInterModComms.IMCEvent;
+import cpw.mods.fml.common.event.FMLFingerprintViolationEvent;
+import cpw.mods.fml.common.event.FMLPostInitializationEvent;
+import cpw.mods.fml.common.event.FMLPreInitializationEvent;
+import cpw.mods.fml.common.event.FMLServerAboutToStartEvent;
+import cpw.mods.fml.common.event.FMLServerStartedEvent;
+import cpw.mods.fml.common.event.FMLServerStartingEvent;
+import cpw.mods.fml.common.event.FMLServerStoppedEvent;
+import cpw.mods.fml.common.event.FMLServerStoppingEvent;
+import cpw.mods.fml.common.event.FMLStateEvent;
+import cpw.mods.fml.common.network.FMLNetworkHandler;
+import cpw.mods.fml.common.versioning.ArtifactVersion;
+import cpw.mods.fml.common.versioning.DefaultArtifactVersion;
+import cpw.mods.fml.common.versioning.VersionParser;
+import cpw.mods.fml.common.versioning.VersionRange;
+
+public class FMLModContainer implements ModContainer
+{
     private Mod modDescriptor;
     private Object modInstance;
     private File source;
@@ -40,162 +86,234 @@ public class FMLModContainer implements ModContainer {
     private Multimap<Class<? extends Annotation>, Object> annotations;
     private DefaultArtifactVersion processedVersion;
     private boolean isNetworkMod;
-    private static final BiMap<Class<? extends FMLStateEvent>, Class<? extends Annotation>> modAnnotationTypes = ImmutableBiMap.<Class<? extends FMLStateEvent>, Class<? extends Annotation>>builder().put(FMLPreInitializationEvent.class, Mod.PreInit.class).put(FMLInitializationEvent.class, Mod.Init.class).put(FMLPostInitializationEvent.class, Mod.PostInit.class).put(FMLServerStartingEvent.class, Mod.ServerStarting.class).put(FMLServerStartedEvent.class, Mod.ServerStarted.class).put(FMLServerStoppingEvent.class, Mod.ServerStopping.class).build();
-    private static final BiMap<Class<? extends Annotation>, Class<? extends FMLStateEvent>> modTypeAnnotations;
+
+    private static final BiMap<Class<? extends FMLEvent>, Class<? extends Annotation>> modAnnotationTypes = ImmutableBiMap.<Class<? extends FMLEvent>, Class<? extends Annotation>>builder()
+        .put(FMLPreInitializationEvent.class, Mod.PreInit.class)
+        .put(FMLInitializationEvent.class, Mod.Init.class)
+        .put(FMLPostInitializationEvent.class, Mod.PostInit.class)
+        .put(FMLServerAboutToStartEvent.class, Mod.ServerAboutToStart.class)
+        .put(FMLServerStartingEvent.class, Mod.ServerStarting.class)
+        .put(FMLServerStartedEvent.class, Mod.ServerStarted.class)
+        .put(FMLServerStoppingEvent.class, Mod.ServerStopping.class)
+        .put(FMLServerStoppedEvent.class, Mod.ServerStopped.class)
+        .put(IMCEvent.class,Mod.IMCCallback.class)
+        .put(FMLFingerprintViolationEvent.class, Mod.FingerprintWarning.class)
+        .build();
+    private static final BiMap<Class<? extends Annotation>, Class<? extends FMLEvent>> modTypeAnnotations = modAnnotationTypes.inverse();
     private String annotationDependencies;
     private VersionRange minecraftAccepted;
+    private boolean fingerprintNotPresent;
+    private Set<String> sourceFingerprints;
+    private Certificate certificate;
+    private String modLanguage;
+    private ILanguageAdapter languageAdapter;
 
-    public FMLModContainer(String className, File modSource, Map<String, Object> modDescriptor) {
+    public FMLModContainer(String className, File modSource, Map<String,Object> modDescriptor)
+    {
         this.className = className;
         this.source = modSource;
         this.descriptor = modDescriptor;
+        this.modLanguage = (String) modDescriptor.get("modLanguage");
+        this.languageAdapter = "scala".equals(modLanguage) ? new ILanguageAdapter.ScalaAdapter() : new ILanguageAdapter.JavaAdapter();
     }
 
-    public String getModId() {
-        return (String)this.descriptor.get("modid");
+    private ILanguageAdapter getLanguageAdapter()
+    {
+        return languageAdapter;
+    }
+    @Override
+    public String getModId()
+    {
+        return (String) descriptor.get("modid");
     }
 
-    public String getName() {
-        return this.modMetadata.name;
+    @Override
+    public String getName()
+    {
+        return modMetadata.name;
     }
 
-    public String getVersion() {
-        return this.internalVersion;
+    @Override
+    public String getVersion()
+    {
+        return internalVersion;
     }
 
-    public File getSource() {
-        return this.source;
+    @Override
+    public File getSource()
+    {
+        return source;
     }
 
-    public ModMetadata getMetadata() {
-        return this.modMetadata;
+    @Override
+    public ModMetadata getMetadata()
+    {
+        return modMetadata;
     }
 
-    public void bindMetadata(MetadataCollection mc) {
-        this.modMetadata = mc.getMetadataForId(this.getModId(), this.descriptor);
-        if (this.descriptor.containsKey("useMetadata")) {
-            this.overridesMetadata = !(Boolean)this.descriptor.get("useMetadata");
+    @Override
+    public void bindMetadata(MetadataCollection mc)
+    {
+        modMetadata = mc.getMetadataForId(getModId(), descriptor);
+
+        if (descriptor.containsKey("useMetadata"))
+        {
+            overridesMetadata = !((Boolean)descriptor.get("useMetadata")).booleanValue();
         }
 
-        if (!this.overridesMetadata && this.modMetadata.useDependencyInformation) {
-            FMLLog.finest("Using mcmod dependency info : %s %s %s", this.modMetadata.requiredMods, this.modMetadata.dependencies, this.modMetadata.dependants);
-        } else {
+        if (overridesMetadata || !modMetadata.useDependencyInformation)
+        {
             Set<ArtifactVersion> requirements = Sets.newHashSet();
             List<ArtifactVersion> dependencies = Lists.newArrayList();
             List<ArtifactVersion> dependants = Lists.newArrayList();
-            this.annotationDependencies = (String)this.descriptor.get("dependencies");
-            Loader.instance().computeDependencies(this.annotationDependencies, requirements, dependencies, dependants);
-            this.modMetadata.requiredMods = requirements;
-            this.modMetadata.dependencies = dependencies;
-            this.modMetadata.dependants = dependants;
-            FMLLog.finest("Parsed dependency info : %s %s %s", requirements, dependencies, dependants);
+            annotationDependencies = (String) descriptor.get("dependencies");
+            Loader.instance().computeDependencies(annotationDependencies, requirements, dependencies, dependants);
+            modMetadata.requiredMods = requirements;
+            modMetadata.dependencies = dependencies;
+            modMetadata.dependants = dependants;
+            FMLLog.log(getModId(), Level.FINEST, "Parsed dependency info : %s %s %s", requirements, dependencies, dependants);
         }
-
-        if (Strings.isNullOrEmpty(this.modMetadata.name)) {
-            FMLLog.info("Mod %s is missing the required element 'name'. Substituting %s", this.getModId(), this.getModId());
-            this.modMetadata.name = this.getModId();
+        else
+        {
+            FMLLog.log(getModId(), Level.FINEST, "Using mcmod dependency info : %s %s %s", modMetadata.requiredMods, modMetadata.dependencies, modMetadata.dependants);
         }
-
-        this.internalVersion = (String)this.descriptor.get("version");
-        if (Strings.isNullOrEmpty(this.internalVersion)) {
-            Properties versionProps = this.searchForVersionProperties();
-            if (versionProps != null) {
-                this.internalVersion = versionProps.getProperty(this.getModId() + ".version");
-                FMLLog.fine("Found version %s for mod %s in version.properties, using", this.internalVersion, this.getModId());
+        if (Strings.isNullOrEmpty(modMetadata.name))
+        {
+            FMLLog.log(getModId(), Level.INFO,"Mod %s is missing the required element 'name'. Substituting %s", getModId(), getModId());
+            modMetadata.name = getModId();
+        }
+        internalVersion = (String) descriptor.get("version");
+        if (Strings.isNullOrEmpty(internalVersion))
+        {
+            Properties versionProps = searchForVersionProperties();
+            if (versionProps != null)
+            {
+                internalVersion = versionProps.getProperty(getModId()+".version");
+                FMLLog.log(getModId(), Level.FINE, "Found version %s for mod %s in version.properties, using", internalVersion, getModId());
             }
+
+        }
+        if (Strings.isNullOrEmpty(internalVersion) && !Strings.isNullOrEmpty(modMetadata.version))
+        {
+            FMLLog.log(getModId(), Level.WARNING, "Mod %s is missing the required element 'version' and a version.properties file could not be found. Falling back to metadata version %s", getModId(), modMetadata.version);
+            internalVersion = modMetadata.version;
+        }
+        if (Strings.isNullOrEmpty(internalVersion))
+        {
+            FMLLog.log(getModId(), Level.WARNING, "Mod %s is missing the required element 'version' and no fallback can be found. Substituting '1.0'.", getModId());
+            modMetadata.version = internalVersion = "1.0";
         }
 
-        if (Strings.isNullOrEmpty(this.internalVersion) && !Strings.isNullOrEmpty(this.modMetadata.version)) {
-            FMLLog.warning("Mod %s is missing the required element 'version' and a version.properties file could not be found. Falling back to metadata version %s", this.getModId(), this.modMetadata.version);
-            this.internalVersion = this.modMetadata.version;
+        String mcVersionString = (String) descriptor.get("acceptedMinecraftVersions");
+        if (!Strings.isNullOrEmpty(mcVersionString))
+        {
+            minecraftAccepted = VersionParser.parseRange(mcVersionString);
         }
-
-        if (Strings.isNullOrEmpty(this.internalVersion)) {
-            FMLLog.warning("Mod %s is missing the required element 'version' and no fallback can be found. Substituting '1.0'.", this.getModId());
-            this.modMetadata.version = this.internalVersion = "1.0";
+        else
+        {
+            minecraftAccepted = Loader.instance().getMinecraftModContainer().getStaticVersionRange();
         }
-
-        String mcVersionString = (String)this.descriptor.get("acceptedMinecraftVersions");
-        if (!Strings.isNullOrEmpty(mcVersionString)) {
-            this.minecraftAccepted = VersionParser.parseRange(mcVersionString);
-        } else {
-            this.minecraftAccepted = Loader.instance().getMinecraftModContainer().getStaticVersionRange();
-        }
-
     }
 
-    public Properties searchForVersionProperties() {
-        try {
-            FMLLog.fine("Attempting to load the file version.properties from %s to locate a version number for %s", this.getSource().getName(), this.getModId());
+    public Properties searchForVersionProperties()
+    {
+        try
+        {
+            FMLLog.log(getModId(), Level.FINE,"Attempting to load the file version.properties from %s to locate a version number for %s", getSource().getName(), getModId());
             Properties version = null;
-            if (this.getSource().isFile()) {
-                ZipFile source = new ZipFile(this.getSource());
+            if (getSource().isFile())
+            {
+                ZipFile source = new ZipFile(getSource());
                 ZipEntry versionFile = source.getEntry("version.properties");
-                if (versionFile != null) {
+                if (versionFile!=null)
+                {
                     version = new Properties();
                     version.load(source.getInputStream(versionFile));
                 }
-
                 source.close();
-            } else if (this.getSource().isDirectory()) {
-                File propsFile = new File(this.getSource(), "version.properties");
-                if (propsFile.exists() && propsFile.isFile()) {
+            }
+            else if (getSource().isDirectory())
+            {
+                File propsFile = new File(getSource(),"version.properties");
+                if (propsFile.exists() && propsFile.isFile())
+                {
                     version = new Properties();
                     FileInputStream fis = new FileInputStream(propsFile);
                     version.load(fis);
                     fis.close();
                 }
             }
-
             return version;
-        } catch (Exception var4) {
-            Throwables.propagateIfPossible(var4);
-            FMLLog.fine("Failed to find a usable version.properties file");
+        }
+        catch (Exception e)
+        {
+            Throwables.propagateIfPossible(e);
+            FMLLog.log(getModId(), Level.FINEST, "Failed to find a usable version.properties file");
             return null;
         }
     }
 
-    public void setEnabledState(boolean enabled) {
+    @Override
+    public void setEnabledState(boolean enabled)
+    {
         this.enabled = enabled;
     }
 
-    public Set<ArtifactVersion> getRequirements() {
-        return this.modMetadata.requiredMods;
+    @Override
+    public Set<ArtifactVersion> getRequirements()
+    {
+        return modMetadata.requiredMods;
     }
 
-    public List<ArtifactVersion> getDependencies() {
-        return this.modMetadata.dependencies;
+    @Override
+    public List<ArtifactVersion> getDependencies()
+    {
+        return modMetadata.dependencies;
     }
 
-    public List<ArtifactVersion> getDependants() {
-        return this.modMetadata.dependants;
+    @Override
+    public List<ArtifactVersion> getDependants()
+    {
+        return modMetadata.dependants;
     }
 
-    public String getSortingRules() {
-        return !this.overridesMetadata && this.modMetadata.useDependencyInformation ? this.modMetadata.printableSortingRules() : Strings.nullToEmpty(this.annotationDependencies);
+    @Override
+    public String getSortingRules()
+    {
+        return ((overridesMetadata || !modMetadata.useDependencyInformation) ? Strings.nullToEmpty(annotationDependencies) : modMetadata.printableSortingRules());
     }
 
-    public boolean matches(Object mod) {
-        return mod == this.modInstance;
+    @Override
+    public boolean matches(Object mod)
+    {
+        return mod == modInstance;
     }
 
-    public Object getMod() {
-        return this.modInstance;
+    @Override
+    public Object getMod()
+    {
+        return modInstance;
     }
 
-    public boolean registerBus(EventBus bus, LoadController controller) {
-        if (this.enabled) {
-            FMLLog.fine("Enabling mod %s", this.getModId());
+    @Override
+    public boolean registerBus(EventBus bus, LoadController controller)
+    {
+        if (this.enabled)
+        {
+            FMLLog.log(getModId(), Level.FINE, "Enabling mod %s", getModId());
             this.eventBus = bus;
             this.controller = controller;
-            this.eventBus.register(this);
+            eventBus.register(this);
             return true;
-        } else {
+        }
+        else
+        {
             return false;
         }
     }
 
-    private Multimap<Class<? extends Annotation>, Object> gatherAnnotations(Class<?> clazz) throws Exception {
+    private Multimap<Class<? extends Annotation>, Object> gatherAnnotations(Class<?> clazz) throws Exception
+    {
         Multimap<Class<? extends Annotation>,Object> anns = ArrayListMultimap.create();
 
         for (Method m : clazz.getDeclaredMethods())
@@ -213,7 +331,7 @@ public class FMLModContainer implements ModContainer {
                     }
                     else
                     {
-                        FMLLog.severe("The mod %s appears to have an invalid method annotation %s. This annotation can only apply to methods with argument types %s -it will not be called", getModId(), a.annotationType().getSimpleName(), Arrays.toString(paramTypes));
+                        FMLLog.log(getModId(), Level.SEVERE,"The mod %s appears to have an invalid method annotation %s. This annotation can only apply to methods with argument types %s -it will not be called", getModId(), a.annotationType().getSimpleName(), Arrays.toString(paramTypes));
                     }
                 }
             }
@@ -221,16 +339,31 @@ public class FMLModContainer implements ModContainer {
         return anns;
     }
 
-    private void processFieldAnnotations(ASMDataTable asmDataTable) throws Exception {
-        SetMultimap<String, ASMDataTable.ASMData> annotations = asmDataTable.getAnnotationsFor(this);
-        this.parseSimpleFieldAnnotation(annotations, Mod.Instance.class.getName(), ModContainer::getMod);
-        this.parseSimpleFieldAnnotation(annotations, Mod.Metadata.class.getName(), ModContainer::getMetadata);
+    private void processFieldAnnotations(ASMDataTable asmDataTable) throws Exception
+    {
+        SetMultimap<String, ASMData> annotations = asmDataTable.getAnnotationsFor(this);
+
+        parseSimpleFieldAnnotation(annotations, Instance.class.getName(), new Function<ModContainer, Object>()
+        {
+            public Object apply(ModContainer mc)
+            {
+                return mc.getMod();
+            }
+        });
+        parseSimpleFieldAnnotation(annotations, Metadata.class.getName(), new Function<ModContainer, Object>()
+        {
+            public Object apply(ModContainer mc)
+            {
+                return mc.getMetadata();
+            }
+        });
     }
 
-    private void parseSimpleFieldAnnotation(SetMultimap<String, ASMDataTable.ASMData> annotations, String annotationClassName, Function<ModContainer, Object> retreiver) throws IllegalAccessException {
+    private void parseSimpleFieldAnnotation(SetMultimap<String, ASMData> annotations, String annotationClassName, Function<ModContainer, Object> retreiver) throws IllegalAccessException
+    {
         String[] annName = annotationClassName.split("\\.");
         String annotationName = annName[annName.length - 1];
-        for (ASMDataTable.ASMData targets : annotations.get(annotationClassName))
+        for (ASMData targets : annotations.get(annotationClassName))
         {
             String targetMod = (String) targets.getAnnotationInfo().get("value");
             Field f = null;
@@ -262,7 +395,7 @@ public class FMLModContainer implements ModContainer {
                 catch (Exception e)
                 {
                     Throwables.propagateIfPossible(e);
-                    FMLLog.log(Level.WARNING, e, "Attempting to load @%s in class %s for %s and failing", annotationName, targets.getClassName(), mc.getModId());
+                    FMLLog.log(getModId(), Level.WARNING, e, "Attempting to load @%s in class %s for %s and failing", annotationName, targets.getClassName(), mc.getModId());
                 }
             }
             if (f != null)
@@ -273,7 +406,7 @@ public class FMLModContainer implements ModContainer {
                     target = modInstance;
                     if (!modInstance.getClass().equals(clz))
                     {
-                        FMLLog.warning("Unable to inject @%s in non-static field %s.%s for %s as it is NOT the primary mod instance", annotationName, targets.getClassName(), targets.getObjectName(), mc.getModId());
+                        FMLLog.log(getModId(), Level.WARNING, "Unable to inject @%s in non-static field %s.%s for %s as it is NOT the primary mod instance", annotationName, targets.getClassName(), targets.getObjectName(), mc.getModId());
                         continue;
                     }
                 }
@@ -283,27 +416,71 @@ public class FMLModContainer implements ModContainer {
     }
 
     @Subscribe
-    public void constructMod(FMLConstructionEvent event) {
-        try {
+    public void constructMod(FMLConstructionEvent event)
+    {
+        try
+        {
             ModClassLoader modClassLoader = event.getModClassLoader();
-            modClassLoader.addFile(this.source);
-            Class<?> clazz = Class.forName(this.className, true, modClassLoader);
-            ASMDataTable asmHarvestedAnnotations = event.getASMHarvestedData();
-            asmHarvestedAnnotations.getAnnotationsFor(this);
-            this.annotations = this.gatherAnnotations(clazz);
-            this.isNetworkMod = FMLNetworkHandler.instance().registerNetworkMod(this, clazz, event.getASMHarvestedData());
-            this.modInstance = clazz.newInstance();
-            ProxyInjector.inject(this, event.getASMHarvestedData(), FMLCommonHandler.instance().getSide());
-            this.processFieldAnnotations(event.getASMHarvestedData());
-        } catch (Throwable var5) {
-            this.controller.errorOccurred(this, var5);
-            Throwables.propagateIfPossible(var5);
-        }
+            modClassLoader.addFile(source);
+            Class<?> clazz = Class.forName(className, true, modClassLoader);
 
+            Certificate[] certificates = clazz.getProtectionDomain().getCodeSource().getCertificates();
+            int len = 0;
+            if (certificates != null)
+            {
+                len = certificates.length;
+            }
+            Builder<String> certBuilder = ImmutableList.<String>builder();
+            for (int i = 0; i < len; i++)
+            {
+                certBuilder.add(CertificateHelper.getFingerprint(certificates[i]));
+            }
+
+            ImmutableList<String> certList = certBuilder.build();
+            sourceFingerprints = ImmutableSet.copyOf(certList);
+
+            String expectedFingerprint = (String) descriptor.get("certificateFingerprint");
+
+            fingerprintNotPresent = true;
+
+            if (expectedFingerprint != null && !expectedFingerprint.isEmpty())
+            {
+                if (!sourceFingerprints.contains(expectedFingerprint))
+                {
+                    Level warnLevel = Level.SEVERE;
+                    if (source.isDirectory())
+                    {
+                        warnLevel = Level.FINER;
+                    }
+                    FMLLog.log(getModId(), warnLevel, "The mod %s is expecting signature %s for source %s, however there is no signature matching that description", getModId(), expectedFingerprint, source.getName());
+                }
+                else
+                {
+                    certificate = certificates[certList.indexOf(expectedFingerprint)];
+                    fingerprintNotPresent = false;
+                }
+            }
+
+            annotations = gatherAnnotations(clazz);
+            isNetworkMod = FMLNetworkHandler.instance().registerNetworkMod(this, clazz, event.getASMHarvestedData());
+            modInstance = getLanguageAdapter().getNewInstance(this,clazz, modClassLoader);
+            if (fingerprintNotPresent)
+            {
+                eventBus.post(new FMLFingerprintViolationEvent(source.isDirectory(), source, ImmutableSet.copyOf(this.sourceFingerprints), expectedFingerprint));
+            }
+            ProxyInjector.inject(this, event.getASMHarvestedData(), FMLCommonHandler.instance().getSide(), getLanguageAdapter());
+            processFieldAnnotations(event.getASMHarvestedData());
+        }
+        catch (Throwable e)
+        {
+            controller.errorOccurred(this, e);
+            Throwables.propagateIfPossible(e);
+        }
     }
 
     @Subscribe
-    public void handleModStateEvent(FMLStateEvent event) {
+    public void handleModStateEvent(FMLEvent event)
+    {
         Class<? extends Annotation> annotation = modAnnotationTypes.get(event.getClass());
         if (annotation == null)
         {
@@ -324,31 +501,48 @@ public class FMLModContainer implements ModContainer {
         }
     }
 
-    public ArtifactVersion getProcessedVersion() {
-        if (this.processedVersion == null) {
-            this.processedVersion = new DefaultArtifactVersion(this.getModId(), this.getVersion());
+    @Override
+    public ArtifactVersion getProcessedVersion()
+    {
+        if (processedVersion == null)
+        {
+            processedVersion = new DefaultArtifactVersion(getModId(), getVersion());
         }
-
-        return this.processedVersion;
+        return processedVersion;
     }
-
-    public boolean isImmutable() {
+    @Override
+    public boolean isImmutable()
+    {
         return false;
     }
 
-    public boolean isNetworkMod() {
-        return this.isNetworkMod;
+    @Override
+    public boolean isNetworkMod()
+    {
+        return isNetworkMod;
     }
 
-    public String getDisplayVersion() {
-        return this.modMetadata.version;
+    @Override
+    public String getDisplayVersion()
+    {
+        return modMetadata.version;
     }
 
-    public VersionRange acceptableMinecraftVersionRange() {
-        return this.minecraftAccepted;
+    @Override
+    public VersionRange acceptableMinecraftVersionRange()
+    {
+        return minecraftAccepted;
     }
 
-    static {
-        modTypeAnnotations = modAnnotationTypes.inverse();
+    @Override
+    public Certificate getSigningCertificate()
+    {
+        return certificate;
+    }
+
+    @Override
+    public String toString()
+    {
+        return "FMLMod:"+getModId()+"{"+getVersion()+"}";
     }
 }

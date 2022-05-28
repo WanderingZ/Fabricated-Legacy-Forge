@@ -1,25 +1,44 @@
-package cpw.mods.fml.common.discovery;
+/*
+ * Forge Mod Loader
+ * Copyright (c) 2012-2013 cpw.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the GNU Lesser Public License v2.1
+ * which accompanies this distribution, and is available at
+ * http://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ * 
+ * Contributors:
+ *     cpw - implementation
+ */
 
-import com.google.common.base.Throwables;
-import cpw.mods.fml.common.ModContainer;
+package cpw.mods.fml.common.discovery;
 
 import java.util.List;
 
-public enum ContainerType {
+import com.google.common.base.Throwables;
+
+import cpw.mods.fml.common.ModContainer;
+
+public enum ContainerType
+{
     JAR(JarDiscoverer.class),
     DIR(DirectoryDiscoverer.class);
 
     private ITypeDiscoverer discoverer;
 
-    private ContainerType(Class discovererClass) {
-        try {
-            this.discoverer = (ITypeDiscoverer)discovererClass.newInstance();
-        } catch (Exception var5) {
-            throw Throwables.propagate(var5);
+    private ContainerType(Class<? extends ITypeDiscoverer> discovererClass)
+    {
+        try
+        {
+            this.discoverer = discovererClass.newInstance();
+        }
+        catch (Exception e)
+        {
+            throw Throwables.propagate(e);
         }
     }
 
-    public List<ModContainer> findMods(ModCandidate candidate, ASMDataTable table) {
-        return this.discoverer.discover(candidate, table);
+    public List<ModContainer> findMods(ModCandidate candidate, ASMDataTable table)
+    {
+        return discoverer.discover(candidate, table);
     }
 }

@@ -1,32 +1,46 @@
+/*
+ * Forge Mod Loader
+ * Copyright (c) 2012-2013 cpw.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the GNU Lesser Public License v2.1
+ * which accompanies this distribution, and is available at
+ * http://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ * 
+ * Contributors:
+ *     cpw - implementation
+ */
+
 package cpw.mods.fml.common.discovery;
+
+import java.io.File;
+import java.util.Arrays;
+import java.util.List;
+import java.util.logging.Level;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
+
 import cpw.mods.fml.common.FMLLog;
 import cpw.mods.fml.common.LoaderException;
 import cpw.mods.fml.common.ModClassLoader;
 import cpw.mods.fml.common.ModContainer;
 import cpw.mods.fml.relauncher.RelaunchLibraryManager;
 
-import java.io.File;
-import java.util.Arrays;
-import java.util.Iterator;
-import java.util.List;
-import java.util.logging.Level;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-
-public class ModDiscoverer {
+public class ModDiscoverer
+{
     private static Pattern zipJar = Pattern.compile("(.+).(zip|jar)$");
+
     private List<ModCandidate> candidates = Lists.newArrayList();
+
     private ASMDataTable dataTable = new ASMDataTable();
+
     private List<File> nonModLibs = Lists.newArrayList();
 
-    public ModDiscoverer() {
-    }
-
-    public void findClasspathMods(ModClassLoader modClassLoader) {
+    public void findClasspathMods(ModClassLoader modClassLoader)
+    {
         List<String> knownLibraries = ImmutableList.<String>builder().addAll(modClassLoader.getDefaultLibraries()).addAll(RelaunchLibraryManager.getLibraries()).build();
         File[] minecraftSources = modClassLoader.getParentSources();
         if (minecraftSources.length == 1 && minecraftSources[0].isFile())
@@ -42,7 +56,7 @@ public class ModDiscoverer {
                 {
                     if (knownLibraries.contains(minecraftSources[i].getName()))
                     {
-                        FMLLog.fine("Skipping known library file %s", minecraftSources[i].getAbsolutePath());
+                        FMLLog.finer("Skipping known library file %s", minecraftSources[i].getAbsolutePath());
                     }
                     else
                     {
@@ -57,9 +71,11 @@ public class ModDiscoverer {
                 }
             }
         }
+
     }
 
-    public void findModDirMods(File modsDir) {
+    public void findModDirMods(File modsDir)
+    {
         File[] modList = modsDir.listFiles();
         // Sort the files into alphabetical order first
         Arrays.sort(modList);
@@ -88,7 +104,8 @@ public class ModDiscoverer {
         }
     }
 
-    public List<ModContainer> identifyMods() {
+    public List<ModContainer> identifyMods()
+    {
         List<ModContainer> modList = Lists.newArrayList();
 
         for (ModCandidate candidate : candidates)
@@ -118,11 +135,14 @@ public class ModDiscoverer {
         return modList;
     }
 
-    public ASMDataTable getASMTable() {
-        return this.dataTable;
+    public ASMDataTable getASMTable()
+    {
+        return dataTable;
     }
 
-    public List<File> getNonModLibs() {
-        return this.nonModLibs;
+    public List<File> getNonModLibs()
+    {
+        return nonModLibs;
     }
+
 }

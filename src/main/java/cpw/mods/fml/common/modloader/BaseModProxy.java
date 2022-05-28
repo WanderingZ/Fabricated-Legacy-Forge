@@ -1,18 +1,41 @@
-package cpw.mods.fml.common.modloader;
+/*
+ * Forge Mod Loader
+ * Copyright (c) 2012-2013 cpw.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the GNU Lesser Public License v2.1
+ * which accompanies this distribution, and is available at
+ * http://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ * 
+ * Contributors:
+ *     cpw - implementation
+ */
 
-import cpw.mods.fml.common.TickType;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.inventory.Inventory;
-import net.minecraft.item.ItemStack;
-import net.minecraft.network.Connection;
-import net.minecraft.network.listener.PacketListener;
-import net.minecraft.network.packet.c2s.play.CustomPayloadC2SPacket;
-import net.minecraft.server.ServerPacketListener;
-import net.minecraft.world.World;
+package cpw.mods.fml.common.modloader;
 
 import java.util.Random;
 
-public interface BaseModProxy {
+import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.inventory.IInventory;
+import net.minecraft.item.ItemStack;
+import net.minecraft.network.INetworkManager;
+import net.minecraft.network.NetServerHandler;
+import net.minecraft.network.packet.NetHandler;
+import net.minecraft.network.packet.Packet250CustomPayload;
+import net.minecraft.world.World;
+
+import cpw.mods.fml.common.TickType;
+import cpw.mods.fml.relauncher.Side;
+import cpw.mods.fml.relauncher.SideOnly;
+
+/**
+ *
+ * Marker interface for BaseMod
+ *
+ * @author cpw
+ *
+ */
+public interface BaseModProxy
+{
     void modsLoaded();
 
     void load();
@@ -23,37 +46,29 @@ public interface BaseModProxy {
 
     String getVersion();
 
-    boolean doTickInGUI(TickType tickType, boolean bl, Object... objects);
+    boolean doTickInGUI(TickType type, boolean end, Object... tickData);
+    boolean doTickInGame(TickType type, boolean end, Object... tickData);
+    void generateSurface(World w, Random random, int i, int j);
+    void generateNether(World w, Random random, int i, int j);
+    int addFuel(int itemId, int damage);
+    void takenFromCrafting(EntityPlayer player, ItemStack item, IInventory craftMatrix);
+    void takenFromFurnace(EntityPlayer player, ItemStack item);
 
-    boolean doTickInGame(TickType tickType, boolean bl, Object... objects);
+    public abstract void onClientLogout(INetworkManager manager);
 
-    void generateSurface(World arg, Random random, int i, int j);
+    public abstract void onClientLogin(EntityPlayer player);
 
-    void generateNether(World arg, Random random, int i, int j);
+    public abstract void serverDisconnect();
 
-    int addFuel(int i, int j);
+    public abstract void serverConnect(NetHandler handler);
 
-    void takenFromCrafting(PlayerEntity arg, ItemStack arg2, Inventory arg3);
+    public abstract void receiveCustomPacket(Packet250CustomPayload packet);
 
-    void takenFromFurnace(PlayerEntity arg, ItemStack arg2);
+    public abstract void clientChat(String text);
 
-    void onClientLogout(Connection arg);
+    public abstract void onItemPickup(EntityPlayer player, ItemStack item);
 
-    void onClientLogin(PlayerEntity arg);
+    public abstract void serverCustomPayload(NetServerHandler handler, Packet250CustomPayload packet);
 
-    void serverDisconnect();
-
-    void serverConnect(PacketListener arg);
-
-    void receiveCustomPacket(CustomPayloadC2SPacket arg);
-
-    void clientChat(String string);
-
-    void onItemPickup(PlayerEntity arg, ItemStack arg2);
-
-    int dispenseEntity(World arg, ItemStack arg2, Random random, int i, int j, int k, int l, int m, double d, double e, double f);
-
-    void serverCustomPayload(ServerPacketListener arg, CustomPayloadC2SPacket arg2);
-
-    void serverChat(ServerPacketListener arg, String string);
+    public abstract void serverChat(NetServerHandler source, String message);
 }

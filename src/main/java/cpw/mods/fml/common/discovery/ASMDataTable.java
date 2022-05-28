@@ -1,23 +1,90 @@
+/*
+ * Forge Mod Loader
+ * Copyright (c) 2012-2013 cpw.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the GNU Lesser Public License v2.1
+ * which accompanies this distribution, and is available at
+ * http://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ * 
+ * Contributors:
+ *     cpw - implementation
+ */
+
 package cpw.mods.fml.common.discovery;
 
-import com.google.common.base.Predicate;
-import com.google.common.collect.*;
-import cpw.mods.fml.common.ModContainer;
-
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-public class ASMDataTable {
-    private SetMultimap<String, ASMDataTable.ASMData> globalAnnotationData = HashMultimap.create();
-    private Map<ModContainer, SetMultimap<String, ASMDataTable.ASMData>> containerAnnotationData;
-    private List<ModContainer> containers = Lists.newArrayList();
+import com.google.common.base.Predicate;
+import com.google.common.collect.HashMultimap;
+import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSetMultimap;
+import com.google.common.collect.Lists;
+import com.google.common.collect.Multimap;
+import com.google.common.collect.Multimaps;
+import com.google.common.collect.SetMultimap;
 
-    public ASMDataTable() {
+import cpw.mods.fml.common.ModContainer;
+
+public class ASMDataTable
+{
+    public static class ASMData
+    {
+        private ModCandidate candidate;
+        private String annotationName;
+        private String className;
+        private String objectName;
+        private Map<String,Object> annotationInfo;
+        public ASMData(ModCandidate candidate, String annotationName, String className, String objectName, Map<String,Object> info)
+        {
+            this.candidate = candidate;
+            this.annotationName = annotationName;
+            this.className = className;
+            this.objectName = objectName;
+            this.annotationInfo = info;
+        }
+        public ModCandidate getCandidate()
+        {
+            return candidate;
+        }
+        public String getAnnotationName()
+        {
+            return annotationName;
+        }
+        public String getClassName()
+        {
+            return className;
+        }
+        public String getObjectName()
+        {
+            return objectName;
+        }
+        public Map<String, Object> getAnnotationInfo()
+        {
+            return annotationInfo;
+        }
     }
 
-    public SetMultimap<String, ASMDataTable.ASMData> getAnnotationsFor(ModContainer container) {
+    private static class ModContainerPredicate implements Predicate<ASMData>
+    {
+        private ModContainer container;
+        public ModContainerPredicate(ModContainer container)
+        {
+            this.container = container;
+        }
+        public boolean apply(ASMData data)
+        {
+            return container.getSource().equals(data.candidate.getModContainer());
+        }
+    }
+    private SetMultimap<String, ASMData> globalAnnotationData = HashMultimap.create();
+    private Map<ModContainer, SetMultimap<String,ASMData>> containerAnnotationData;
+
+    private List<ModContainer> containers = Lists.newArrayList();
+
+    public SetMultimap<String,ASMData> getAnnotationsFor(ModContainer container)
+    {
         if (containerAnnotationData == null)
         {
             ImmutableMap.Builder<ModContainer, SetMultimap<String, ASMData>> mapBuilder = ImmutableMap.<ModContainer, SetMultimap<String,ASMData>>builder();
@@ -31,63 +98,18 @@ public class ASMDataTable {
         return containerAnnotationData.get(container);
     }
 
-    public Set<ASMDataTable.ASMData> getAll(String annotation) {
-        return this.globalAnnotationData.get(annotation);
+    public Set<ASMData> getAll(String annotation)
+    {
+        return globalAnnotationData.get(annotation);
     }
 
-    public void addASMData(ModCandidate candidate, String annotation, String className, String objectName, Map<String, Object> annotationInfo) {
-        this.globalAnnotationData.put(annotation, new ASMDataTable.ASMData(candidate, annotation, className, objectName, annotationInfo));
+    public void addASMData(ModCandidate candidate, String annotation, String className, String objectName, Map<String,Object> annotationInfo)
+    {
+        globalAnnotationData.put(annotation, new ASMData(candidate, annotation, className, objectName, annotationInfo));
     }
 
-    public void addContainer(ModContainer container) {
+    public void addContainer(ModContainer container)
+    {
         this.containers.add(container);
-    }
-
-    private static class ModContainerPredicate implements Predicate<ASMDataTable.ASMData> {
-        private ModContainer container;
-
-        public ModContainerPredicate(ModContainer container) {
-            this.container = container;
-        }
-
-        public boolean apply(ASMDataTable.ASMData data) {
-            return this.container.getSource().equals(data.candidate.getModContainer());
-        }
-    }
-
-    public static class ASMData {
-        private ModCandidate candidate;
-        private String annotationName;
-        private String className;
-        private String objectName;
-        private Map<String, Object> annotationInfo;
-
-        public ASMData(ModCandidate candidate, String annotationName, String className, String objectName, Map<String, Object> info) {
-            this.candidate = candidate;
-            this.annotationName = annotationName;
-            this.className = className;
-            this.objectName = objectName;
-            this.annotationInfo = info;
-        }
-
-        public ModCandidate getCandidate() {
-            return this.candidate;
-        }
-
-        public String getAnnotationName() {
-            return this.annotationName;
-        }
-
-        public String getClassName() {
-            return this.className;
-        }
-
-        public String getObjectName() {
-            return this.objectName;
-        }
-
-        public Map<String, Object> getAnnotationInfo() {
-            return this.annotationInfo;
-        }
     }
 }

@@ -1,29 +1,50 @@
+/*
+ * Forge Mod Loader
+ * Copyright (c) 2012-2013 cpw.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the GNU Lesser Public License v2.1
+ * which accompanies this distribution, and is available at
+ * http://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ * 
+ * Contributors:
+ *     cpw - implementation
+ */
+
 package cpw.mods.fml.common.event;
 
 import com.google.common.base.Throwables;
-import cpw.mods.fml.common.Loader;
-import cpw.mods.fml.common.LoaderState;
 
-public class FMLPostInitializationEvent extends FMLStateEvent {
-    public FMLPostInitializationEvent(Object... data) {
+import cpw.mods.fml.common.Loader;
+import cpw.mods.fml.common.LoaderState.ModState;
+
+public class FMLPostInitializationEvent extends FMLStateEvent
+{
+    public FMLPostInitializationEvent(Object... data)
+    {
         super(data);
     }
 
-    public LoaderState.ModState getModState() {
-        return LoaderState.ModState.POSTINITIALIZED;
+    @Override
+    public ModState getModState()
+    {
+        return ModState.POSTINITIALIZED;
     }
 
-    public Object buildSoftDependProxy(String modId, String className) {
-        if (Loader.isModLoaded(modId)) {
-            try {
-                Class<?> clz = Class.forName(className, true, Loader.instance().getModClassLoader());
+    public Object buildSoftDependProxy(String modId, String className)
+    {
+        if (Loader.isModLoaded(modId))
+        {
+            try
+            {
+                Class<?> clz = Class.forName(className,true,Loader.instance().getModClassLoader());
                 return clz.newInstance();
-            } catch (Exception var4) {
-                Throwables.propagateIfPossible(var4);
+            }
+            catch (Exception e)
+            {
+                Throwables.propagateIfPossible(e);
                 return null;
             }
-        } else {
-            return null;
         }
+        return null;
     }
 }

@@ -1,29 +1,67 @@
+/*
+ * Forge Mod Loader
+ * Copyright (c) 2012-2013 cpw.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the GNU Lesser Public License v2.1
+ * which accompanies this distribution, and is available at
+ * http://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ * 
+ * Contributors:
+ *     cpw - implementation
+ */
+
 package cpw.mods.fml.relauncher;
 
-public class DummyDownloader implements IDownloadDisplay {
-    public DummyDownloader() {
+public class DummyDownloader implements IDownloadDisplay
+{
+
+    @Override
+    public void resetProgress(int sizeGuess)
+    {
+        // TODO Auto-generated method stub
+
     }
 
-    public void resetProgress(int sizeGuess) {
+    @Override
+    public void setPokeThread(Thread currentThread)
+    {
+        // TODO Auto-generated method stub
+
     }
 
-    public void setPokeThread(Thread currentThread) {
+    @Override
+    public void updateProgress(int fullLength)
+    {
+        // TODO Auto-generated method stub
+
     }
 
-    public void updateProgress(int fullLength) {
-    }
-
-    public boolean shouldStopIt() {
+    @Override
+    public boolean shouldStopIt()
+    {
+        // TODO Auto-generated method stub
         return false;
     }
 
-    public void updateProgressString(String string, Object... data) {
+    @Override
+    public void updateProgressString(String string, Object... data)
+    {
+        // TODO Auto-generated method stub
+
     }
 
-    public Object makeDialog() {
+    @Override
+    public Object makeDialog()
+    {
+        // TODO Auto-generated method stub
         return null;
     }
 
-    public void makeHeadless() {
+    @Override
+    public void makeHeadless()
+    {
+        // TODO Auto-generated method stub
+
     }
+
 }

@@ -1,10 +1,10 @@
 package fr.catcore.fabricatedforge.mixin.forgefml.util.hit;
 
-import net.minecraft.util.hit.HitResult;
+import net.minecraft.util.hit.BlockHitResult;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 
-@Mixin(HitResult.class)
+@Mixin(BlockHitResult.class)
 public class HitResultMixin {
 
     @Unique

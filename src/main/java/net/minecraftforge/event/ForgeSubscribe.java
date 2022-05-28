@@ -1,14 +1,15 @@
 package net.minecraftforge.event;
 
-import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
-import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
-@Retention(RetentionPolicy.RUNTIME)
-@Target({ElementType.METHOD})
-public @interface ForgeSubscribe {
-    EventPriority priority() default EventPriority.NORMAL;
+import static java.lang.annotation.RetentionPolicy.*;
+import static java.lang.annotation.ElementType.*;
 
-    boolean receiveCanceled() default false;
+@Retention(value = RUNTIME)
+@Target(value = METHOD)
+public @interface ForgeSubscribe
+{
+    public EventPriority priority() default EventPriority.NORMAL;
+    public boolean receiveCanceled() default false;
 }

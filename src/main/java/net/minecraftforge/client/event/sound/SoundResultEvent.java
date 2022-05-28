@@ -1,17 +1,19 @@
 package net.minecraftforge.client.event.sound;
 
-import net.minecraft.client.sound.Sound;
-import net.minecraft.client.sound.SoundSystem;
+import net.minecraft.client.audio.SoundManager;
+import net.minecraft.client.audio.SoundPoolEntry;
 
-public abstract class SoundResultEvent extends SoundEvent {
-    public final SoundSystem manager;
-    public final Sound source;
+public abstract class SoundResultEvent extends SoundEvent
+{
+    public final SoundManager manager;
+    public final SoundPoolEntry source;
     public final String name;
     public final float volume;
     public final float pitch;
-    public Sound result;
-
-    public SoundResultEvent(SoundSystem manager, Sound source, String name, float volume, float pitch) {
+    public SoundPoolEntry result;
+    
+    public SoundResultEvent(SoundManager manager, SoundPoolEntry source, String name, float volume, float pitch)
+    {
         this.manager = manager;
         this.source = source;
         this.name = name;

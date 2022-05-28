@@ -1,11 +1,16 @@
 package net.minecraftforge.client.event.sound;
 
-import net.minecraft.client.sound.SoundSystem;
+import net.minecraft.client.audio.SoundManager;
 
-public class SoundLoadEvent extends SoundEvent {
-    public final SoundSystem manager;
-
-    public SoundLoadEvent(SoundSystem manager) {
+/**
+ * Raised by the SoundManager.loadSoundSettings, this would be a good place for 
+ * adding your custom sounds to the SoundPool.
+ */
+public class SoundLoadEvent extends SoundEvent
+{
+    public final SoundManager manager;
+    public SoundLoadEvent(SoundManager manager)
+    {
         this.manager = manager;
     }
 }

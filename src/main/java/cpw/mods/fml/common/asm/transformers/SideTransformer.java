@@ -1,8 +1,20 @@
+/*
+ * Forge Mod Loader
+ * Copyright (c) 2012-2013 cpw.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the GNU Lesser Public License v2.1
+ * which accompanies this distribution, and is available at
+ * http://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ * 
+ * Contributors:
+ *     cpw - implementation
+ */
+
 package cpw.mods.fml.common.asm.transformers;
 
-import cpw.mods.fml.common.asm.SideOnly;
-import cpw.mods.fml.relauncher.FMLRelauncher;
-import cpw.mods.fml.relauncher.IClassTransformer;
+import java.util.Iterator;
+import java.util.List;
+
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.Type;
@@ -11,48 +23,67 @@ import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.FieldNode;
 import org.objectweb.asm.tree.MethodNode;
 
-import java.util.Iterator;
-import java.util.List;
+import cpw.mods.fml.relauncher.FMLRelauncher;
+import cpw.mods.fml.relauncher.IClassTransformer;
+import cpw.mods.fml.relauncher.SideOnly;
 
-public class SideTransformer implements IClassTransformer {
+public class SideTransformer implements IClassTransformer
+{
     private static String SIDE = FMLRelauncher.side();
     private static final boolean DEBUG = false;
+    @SuppressWarnings("unchecked")
+    @Override
+    public byte[] transform(String name, String transformedName, byte[] bytes)
+    {
+    	if (bytes == null) { return null; }
 
-    public SideTransformer() {
-    }
-
-    public byte[] transform(String name, byte[] bytes) {
         ClassNode classNode = new ClassNode();
         ClassReader classReader = new ClassReader(bytes);
         classReader.accept(classNode, 0);
-        if (this.remove(classNode.visibleAnnotations, SIDE)) {
-            return null;
-        } else {
-            Iterator<FieldNode> fields = classNode.fields.iterator();
 
-            while(fields.hasNext()) {
-                FieldNode field = (FieldNode)fields.next();
-                if (this.remove(field.visibleAnnotations, SIDE)) {
-                    fields.remove();
-                }
+        if (remove((List<AnnotationNode>)classNode.visibleAnnotations, SIDE))
+        {
+            if (DEBUG)
+            {
+                System.out.println(String.format("Attempted to load class %s for invalid side %s", classNode.name, SIDE));
             }
-
-            Iterator<MethodNode> methods = classNode.methods.iterator();
-
-            while(methods.hasNext()) {
-                MethodNode method = (MethodNode)methods.next();
-                if (this.remove(method.visibleAnnotations, SIDE)) {
-                    methods.remove();
-                }
-            }
-
-            ClassWriter writer = new ClassWriter(1);
-            classNode.accept(writer);
-            return writer.toByteArray();
+            throw new RuntimeException(String.format("Attempted to load class %s for invalid side %s", classNode.name, SIDE));
         }
+
+        Iterator<FieldNode> fields = classNode.fields.iterator();
+        while(fields.hasNext())
+        {
+            FieldNode field = fields.next();
+            if (remove((List<AnnotationNode>)field.visibleAnnotations, SIDE))
+            {
+                if (DEBUG)
+                {
+                    System.out.println(String.format("Removing Field: %s.%s", classNode.name, field.name));
+                }
+                fields.remove();
+            }
+        }
+        Iterator<MethodNode> methods = classNode.methods.iterator();
+        while(methods.hasNext())
+        {
+            MethodNode method = methods.next();
+            if (remove((List<AnnotationNode>)method.visibleAnnotations, SIDE))
+            {
+                if (DEBUG)
+                {
+                    System.out.println(String.format("Removing Method: %s.%s%s", classNode.name, method.name, method.desc));
+                }
+                methods.remove();
+            }
+        }
+
+        ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_MAXS);
+        classNode.accept(writer);
+        return writer.toByteArray();
     }
 
-    private boolean remove(List<AnnotationNode> anns, String side) {
+    private boolean remove(List<AnnotationNode> anns, String side)
+    {
         if (anns == null)
         {
             return false;

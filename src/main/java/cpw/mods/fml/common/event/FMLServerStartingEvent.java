@@ -1,28 +1,46 @@
+/*
+ * Forge Mod Loader
+ * Copyright (c) 2012-2013 cpw.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the GNU Lesser Public License v2.1
+ * which accompanies this distribution, and is available at
+ * http://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ * 
+ * Contributors:
+ *     cpw - implementation
+ */
+
 package cpw.mods.fml.common.event;
 
-import cpw.mods.fml.common.LoaderState;
-import net.minecraft.command.Command;
+import net.minecraft.command.CommandHandler;
+import net.minecraft.command.ICommand;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.command.CommandRegistry;
+import cpw.mods.fml.common.LoaderState.ModState;
 
-public class FMLServerStartingEvent extends FMLStateEvent {
+public class FMLServerStartingEvent extends FMLStateEvent
+{
+
     private MinecraftServer server;
 
-    public FMLServerStartingEvent(Object... data) {
+    public FMLServerStartingEvent(Object... data)
+    {
         super(data);
-        this.server = (MinecraftServer)data[0];
+        this.server = (MinecraftServer) data[0];
+    }
+    @Override
+    public ModState getModState()
+    {
+        return ModState.AVAILABLE;
     }
 
-    public LoaderState.ModState getModState() {
-        return LoaderState.ModState.AVAILABLE;
+    public MinecraftServer getServer()
+    {
+        return server;
     }
 
-    public MinecraftServer getServer() {
-        return this.server;
-    }
-
-    public void registerServerCommand(Command command) {
-        CommandRegistry ch = (CommandRegistry)this.getServer().getCommandManager();
-        ch.registerCommand(command);
+    public void registerServerCommand(ICommand command)
+    {
+        CommandHandler ch = (CommandHandler) getServer().func_71187_D();
+        ch.func_71560_a(command);
     }
 }

@@ -1,45 +1,48 @@
 package net.minecraftforge.oredict;
 
-import net.minecraft.block.Block;
-import net.minecraft.inventory.CraftingInventory;
-import net.minecraft.item.Item;
-import net.minecraft.item.ItemStack;
-import net.minecraft.recipe.RecipeType;
-
 import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.List;
 
-public class ShapelessOreRecipe implements RecipeType {
-    private ItemStack output;
+import net.minecraft.block.Block;
+import net.minecraft.item.crafting.CraftingManager;
+import net.minecraft.item.crafting.IRecipe;
+import net.minecraft.inventory.InventoryCrafting;
+import net.minecraft.item.Item;
+import net.minecraft.item.ItemStack;
+import net.minecraft.item.crafting.ShapelessRecipes;
+import net.minecraft.world.World;
+
+public class ShapelessOreRecipe implements IRecipe
+{
+    private ItemStack output = null;
     private ArrayList input = new ArrayList();
 
-    public ShapelessOreRecipe(Block result, Object... recipe) {
-        this(new ItemStack(result), recipe);
-    }
+    public ShapelessOreRecipe(Block result, Object... recipe){ this(new ItemStack(result), recipe); }
+    public ShapelessOreRecipe(Item  result, Object... recipe){ this(new ItemStack(result), recipe); }
 
-    public ShapelessOreRecipe(Item result, Object... recipe) {
-        this(new ItemStack(result), recipe);
-    }
-
-    public ShapelessOreRecipe(ItemStack result, Object... recipe) {
-        this.output = result.copy();
+    public ShapelessOreRecipe(ItemStack result, Object... recipe)
+    {
+        output = result.copy();
         for (Object in : recipe)
         {
             if (in instanceof ItemStack)
             {
-                this.input.add(((ItemStack)in).copy());
+                input.add(((ItemStack)in).copy());
             }
             else if (in instanceof Item)
             {
-                this.input.add(new ItemStack((Item)in));
+                input.add(new ItemStack((Item)in));
             }
             else if (in instanceof Block)
             {
-                this.input.add(new ItemStack((Block)in));
+                input.add(new ItemStack((Block)in));
             }
             else if (in instanceof String)
             {
-                this.input.add(OreDictionary.getOres((String)in));
+                input.add(OreDictionary.getOres((String)in));
             }
             else
             {
@@ -48,34 +51,48 @@ public class ShapelessOreRecipe implements RecipeType {
                 {
                     ret += tmp + ", ";
                 }
-                ret += this.output;
+                ret += output;
                 throw new RuntimeException(ret);
             }
         }
     }
 
-    @Override
-    public int getSize() {
-        return this.input.size();
-    }
+    ShapelessOreRecipe(ShapelessRecipes recipe, Map<ItemStack, String> replacements)
+    {
+        output = recipe.getRecipeOutput();
 
-    @Override
-    public ItemStack getOutput() {
-        return this.output;
-    }
-
-    @Override
-    public ItemStack getResult(CraftingInventory var1) {
-        return this.output.copy();
-    }
-
-    @Override
-    public boolean method_3500(CraftingInventory var1) {
-        ArrayList required = new ArrayList(this.input);
-
-        for (int x = 0; x < var1.getInvSize(); x++)
+        for(ItemStack ingred : ((List<ItemStack>)recipe.recipeItems))
         {
-            ItemStack slot = var1.getInvStack(x);
+            Object finalObj = ingred;
+            for(Entry<ItemStack, String> replace : replacements.entrySet())
+            {
+                if(OreDictionary.itemMatches(replace.getKey(), ingred, false))
+                {
+                    finalObj = OreDictionary.getOres(replace.getValue());
+                    break;
+                }
+            }
+            input.add(finalObj);
+        }
+    }
+
+    @Override
+    public int getRecipeSize(){ return input.size(); }
+
+    @Override
+    public ItemStack getRecipeOutput(){ return output; }
+
+    @Override
+    public ItemStack getCraftingResult(InventoryCrafting var1){ return output.copy(); }
+
+    @Override
+    public boolean matches(InventoryCrafting var1, World world)
+    {
+        ArrayList required = new ArrayList(input);
+
+        for (int x = 0; x < var1.getSizeInventory(); x++)
+        {
+            ItemStack slot = var1.getStackInSlot(x);
 
             if (slot != null)
             {
@@ -90,13 +107,13 @@ public class ShapelessOreRecipe implements RecipeType {
 
                     if (next instanceof ItemStack)
                     {
-                        match = this.checkItemEquals((ItemStack)next, slot);
+                        match = checkItemEquals((ItemStack)next, slot);
                     }
                     else if (next instanceof ArrayList)
                     {
                         for (ItemStack item : (ArrayList<ItemStack>)next)
                         {
-                            match = match || this.checkItemEquals(item, slot);
+                            match = match || checkItemEquals(item, slot);
                         }
                     }
 
@@ -118,7 +135,18 @@ public class ShapelessOreRecipe implements RecipeType {
         return required.isEmpty();
     }
 
-    private boolean checkItemEquals(ItemStack target, ItemStack input) {
-        return target.id == input.id && (target.getMeta() == -1 || target.getMeta() == input.getMeta());
+    private boolean checkItemEquals(ItemStack target, ItemStack input)
+    {
+        return (target.itemID == input.itemID && (target.getItemDamage() == OreDictionary.WILDCARD_VALUE || target.getItemDamage() == input.getItemDamage()));
+    }
+
+    /**
+     * Returns the input for this recipe, any mod accessing this value should never
+     * manipulate the values in this array as it will effect the recipe itself.
+     * @return The recipes input vales.
+     */
+    public ArrayList getInput()
+    {
+        return this.input;
     }
 }

@@ -1,254 +1,335 @@
+/*
+ * Forge Mod Loader
+ * Copyright (c) 2012-2013 cpw.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the GNU Lesser Public License v2.1
+ * which accompanies this distribution, and is available at
+ * http://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * Contributors:
+ *     cpw - implementation
+ */
+
 package cpw.mods.fml.relauncher;
 
-import fr.catcore.fabricatedforge.mixininterface.IMinecraftApplet;
-import net.fabricmc.loader.impl.game.minecraft.applet.AppletLauncher;
-import net.fabricmc.loader.impl.launch.FabricLauncherBase;
-
-import javax.swing.*;
 import java.applet.Applet;
 import java.io.File;
 import java.lang.reflect.Method;
 import java.net.URLClassLoader;
 
-public class FMLRelauncher {
+import javax.swing.JDialog;
+import javax.swing.JOptionPane;
+
+public class FMLRelauncher
+{
     private static FMLRelauncher INSTANCE;
     public static String logFileNamePattern;
     private static String side;
     private RelaunchClassLoader classLoader;
     private Object newApplet;
     private Class<? super Object> appletClass;
+
     JDialog popupWindow;
 
-    public static void handleClientRelaunch(ArgsWrapper wrap) {
+    public static void handleClientRelaunch(ArgsWrapper wrap)
+    {
         logFileNamePattern = "ForgeModLoader-client-%g.log";
         side = "CLIENT";
         instance().relaunchClient(wrap);
     }
 
-    public static void handleServerRelaunch(ArgsWrapper wrap) {
+    public static void handleServerRelaunch(ArgsWrapper wrap)
+    {
         logFileNamePattern = "ForgeModLoader-server-%g.log";
         side = "SERVER";
         instance().relaunchServer(wrap);
     }
 
-    static FMLRelauncher instance() {
-        if (INSTANCE == null) {
+    static FMLRelauncher instance()
+    {
+        if (INSTANCE == null)
+        {
             INSTANCE = new FMLRelauncher();
         }
-
         return INSTANCE;
+
     }
 
-    private FMLRelauncher() {
-//        URLClassLoader ucl = (URLClassLoader) this.getClass().getClassLoader();
-//        this.classLoader = new RelaunchClassLoader(ucl.getURLs());
-//        this.classLoader = FabricLauncherBase.getLauncher().getTargetClassLoader();
-        this.classLoader = new RelaunchClassLoader();
+    private FMLRelauncher()
+    {
+        URLClassLoader ucl = (URLClassLoader) getClass().getClassLoader();
+
+        classLoader = new RelaunchClassLoader(ucl.getURLs());
+
     }
 
-    private void showWindow(boolean showIt) {
-        if (RelaunchLibraryManager.downloadMonitor == null) {
-            try {
-                if (showIt) {
-                    RelaunchLibraryManager.downloadMonitor = new Downloader();
-                    this.popupWindow = (JDialog) RelaunchLibraryManager.downloadMonitor.makeDialog();
-                } else {
-                    RelaunchLibraryManager.downloadMonitor = new DummyDownloader();
-                }
-            } catch (Throwable var3) {
-                if (RelaunchLibraryManager.downloadMonitor == null) {
-                    RelaunchLibraryManager.downloadMonitor = new DummyDownloader();
-                    var3.printStackTrace();
-                } else {
-                    RelaunchLibraryManager.downloadMonitor.makeHeadless();
-                }
-
-                this.popupWindow = null;
+    private void showWindow(boolean showIt)
+    {
+        if (RelaunchLibraryManager.downloadMonitor != null) { return; }
+        try
+        {
+            if (showIt)
+            {
+                RelaunchLibraryManager.downloadMonitor = new Downloader();
+                popupWindow = (JDialog) RelaunchLibraryManager.downloadMonitor.makeDialog();
             }
-
+            else
+            {
+                RelaunchLibraryManager.downloadMonitor = new DummyDownloader();
+            }
+        }
+        catch (Throwable e)
+        {
+            if (RelaunchLibraryManager.downloadMonitor == null)
+            {
+                RelaunchLibraryManager.downloadMonitor = new DummyDownloader();
+                e.printStackTrace();
+            }
+            else
+            {
+                RelaunchLibraryManager.downloadMonitor.makeHeadless();
+            }
+            popupWindow = null;
         }
     }
 
-    private void relaunchClient(ArgsWrapper wrap) {
-        this.showWindow(true);
+    private void relaunchClient(ArgsWrapper wrap)
+    {
+        showWindow(true);
+        // Now we re-inject the home into the "new" minecraft under our control
+        Class<? super Object> client;
+        try
+        {
+            File minecraftHome = computeExistingClientHome();
+            setupHome(minecraftHome);
 
-        Class client;
-        try {
-            File minecraftHome = this.computeExistingClientHome();
-            this.setupHome(minecraftHome);
-            client = this.setupNewClientHome(minecraftHome);
-        } finally {
-            if (this.popupWindow != null) {
-                this.popupWindow.setVisible(false);
-                this.popupWindow.dispose();
+            client = setupNewClientHome(minecraftHome);
+        }
+        finally
+        {
+            if (popupWindow != null)
+            {
+                popupWindow.setVisible(false);
+                popupWindow.dispose();
             }
-
         }
 
-        if (RelaunchLibraryManager.downloadMonitor.shouldStopIt()) {
+        if (RelaunchLibraryManager.downloadMonitor.shouldStopIt())
+        {
             System.exit(1);
         }
-
-        try {
-            Method clientMethod = ReflectionHelper.findMethod(client, (Object) null, new String[]{"fmlReentry"}, ArgsWrapper.class);
-            clientMethod.setAccessible(true);
-            clientMethod.invoke((Object) null, wrap);
-        } catch (Exception var7) {
-            var7.printStackTrace();
+        try
+        {
+            ReflectionHelper.findMethod(client, null, new String[] { "fmlReentry" }, ArgsWrapper.class).invoke(null, wrap);
         }
-
+        catch (Exception e)
+        {
+            e.printStackTrace();
+            // Hmmm
+        }
     }
 
-    private Class<? super Object> setupNewClientHome(File minecraftHome) {
-        Class<? super Object> client = ReflectionHelper.getClass(this.classLoader, "net.minecraft.client.Minecraft");
-        ReflectionHelper.setPrivateValue(client, (Object) null, minecraftHome, "gameFolder", "am", "field_3798");
+    private Class<? super Object> setupNewClientHome(File minecraftHome)
+    {
+        Class<? super Object> client = ReflectionHelper.getClass(classLoader, "net.minecraft.client.Minecraft");
+        ReflectionHelper.setPrivateValue(client, null, minecraftHome,
+                "field_" + "71463_am" /*Separate that so that MCP's updatenames does not replace it*/,
+                "an", "minecraftDir");
         return client;
     }
 
-    private void relaunchServer(ArgsWrapper wrap) {
-        this.showWindow(false);
+    private void relaunchServer(ArgsWrapper wrap)
+    {
+        showWindow(false);
+        // Now we re-inject the home into the "new" minecraft under our control
+        Class<? super Object> server;
         File minecraftHome = new File(".");
-        this.setupHome(minecraftHome);
-        Class<? super Object> server = ReflectionHelper.getClass(this.classLoader, "net.minecraft.server.MinecraftServer");
+        setupHome(minecraftHome);
 
-        try {
-            Method method = ReflectionHelper.findMethod(server, (Object) null, new String[]{"fmlReentry"}, ArgsWrapper.class);
-            method.setAccessible(true);
-            method.invoke((Object) null, wrap);
-        } catch (Exception var5) {
-            var5.printStackTrace();
+        server = ReflectionHelper.getClass(classLoader, "net.minecraft.server.MinecraftServer");
+        try
+        {
+            ReflectionHelper.findMethod(server, null, new String[] { "fmlReentry" }, ArgsWrapper.class).invoke(null, wrap);
         }
-
+        catch (Exception e)
+        {
+            e.printStackTrace();
+        }
     }
 
-    private void setupHome(File minecraftHome) {
-        FMLInjectionData.build(minecraftHome, this.classLoader);
+    private void setupHome(File minecraftHome)
+    {
+        FMLInjectionData.build(minecraftHome, classLoader);
         FMLRelaunchLog.minecraftHome = minecraftHome;
-        FMLRelaunchLog.info("Forge Mod Loader version %s.%s.%s.%s for Minecraft client:%s, server:%s loading", FMLInjectionData.major, FMLInjectionData.minor, FMLInjectionData.rev, FMLInjectionData.build, FMLInjectionData.mccversion, FMLInjectionData.mcsversion);
+        FMLRelaunchLog.info("Forge Mod Loader version %s.%s.%s.%s for Minecraft %s loading", FMLInjectionData.major, FMLInjectionData.minor,
+                FMLInjectionData.rev, FMLInjectionData.build, FMLInjectionData.mccversion, FMLInjectionData.mcpversion);
+        FMLRelaunchLog.info("Java is %s, version %s, running on %s:%s:%s, installed at %s", System.getProperty("java.vm.name"), System.getProperty("java.version"), System.getProperty("os.name"), System.getProperty("os.arch"), System.getProperty("os.version"), System.getProperty("java.home"));
+        FMLRelaunchLog.fine("Java classpath at launch is %s", System.getProperty("java.class.path"));
+        FMLRelaunchLog.fine("Java library path at launch is %s", System.getProperty("java.library.path"));
 
-        try {
-            RelaunchLibraryManager.handleLaunch(minecraftHome, this.classLoader);
-        } catch (Throwable var5) {
-            if (this.popupWindow != null) {
-                try {
-                    String logFile = (new File(minecraftHome, "ForgeModLoader-client-0.log")).getCanonicalPath();
-                    JOptionPane.showMessageDialog(this.popupWindow, String.format("<html><div align=\"center\"><font size=\"+1\">There was a fatal error starting up minecraft and FML</font></div><br/>Minecraft cannot launch in it's current configuration<br/>Please consult the file <i><a href=\"file:///%s\">%s</a></i> for further information</html>", logFile, logFile), "Fatal FML error", 0);
-                } catch (Exception var4) {
+        try
+        {
+            RelaunchLibraryManager.handleLaunch(minecraftHome, classLoader);
+        }
+        catch (Throwable t)
+        {
+            if (popupWindow != null)
+            {
+                try
+                {
+                    String logFile = new File(minecraftHome, "ForgeModLoader-client-0.log").getCanonicalPath();
+                    JOptionPane.showMessageDialog(popupWindow, String.format(
+                            "<html><div align=\"center\"><font size=\"+1\">There was a fatal error starting up minecraft and FML</font></div><br/>"
+                                    + "Minecraft cannot launch in it's current configuration<br/>"
+                                    + "Please consult the file <i><a href=\"file:///%s\">%s</a></i> for further information</html>", logFile, logFile),
+                            "Fatal FML error", JOptionPane.ERROR_MESSAGE);
+                }
+                catch (Exception ex)
+                {
+                    // ah well, we tried
                 }
             }
-
-            throw new RuntimeException(var5);
+            throw new RuntimeException(t);
         }
     }
 
-    private File computeExistingClientHome() {
-        Class<? super Object> mcMaster = ReflectionHelper.getClass(this.getClass().getClassLoader(), "net.minecraft.client.Minecraft");
+    /**
+     * @return the location of the client home
+     */
+    private File computeExistingClientHome()
+    {
+        Class<? super Object> mcMaster = ReflectionHelper.getClass(getClass().getClassLoader(), "net.minecraft.client.Minecraft");
+        // If we get the system property we inject into the old MC, setup the
+        // dir, then pull the value
         String str = System.getProperty("minecraft.applet.TargetDirectory");
-        if (str != null) {
+        if (str != null)
+        {
             str = str.replace('/', File.separatorChar);
-            ReflectionHelper.setPrivateValue(mcMaster, (Object) null, new File(str), "gameFolder", "field_3798", "am");
+            ReflectionHelper.setPrivateValue(mcMaster, null, new File(str), "minecraftDir", "an", "minecraftDir");
         }
-
-        Method setupHome = ReflectionHelper.findMethod(mcMaster, (Object) null, new String[]{"getGameFolder", "method_2937", "b"});
-
-        try {
-            setupHome.invoke((Object) null);
-        } catch (Exception var5) {
+        // We force minecraft to setup it's homedir very early on so we can
+        // inject stuff into it
+        Method setupHome = ReflectionHelper.findMethod(mcMaster, null, new String[] { "func_71380_b", "getMinecraftDir", "b" });
+        try
+        {
+            setupHome.invoke(null);
         }
-
-        return (File) ReflectionHelper.getPrivateValue(mcMaster, (Object) null, new String[]{"gameFolder", "field_3798", "am"});
+        catch (Exception e)
+        {
+            // Hmmm
+        }
+        File minecraftHome = ReflectionHelper.getPrivateValue(mcMaster, null, "field_71463_am", "an", "minecraftDir");
+        return minecraftHome;
     }
 
-    public static void appletEntry(Applet minecraftApplet) {
+    public static void appletEntry(Applet minecraftApplet)
+    {
         side = "CLIENT";
         logFileNamePattern = "ForgeModLoader-client-%g.log";
         instance().relaunchApplet(minecraftApplet);
     }
 
-    private void relaunchApplet(Applet minecraftApplet) {
-        this.showWindow(true);
-        this.appletClass = ReflectionHelper.getClass(this.classLoader, "net.minecraft.client.MinecraftApplet");
-        if (((IMinecraftApplet)minecraftApplet).isRelaunched()
-                /*minecraftApplet.getClass().getClassLoader() == this.classLoader*/
-        ) {
-            if (this.popupWindow != null) {
-                this.popupWindow.setVisible(false);
-                this.popupWindow.dispose();
-            }
+    private void relaunchApplet(Applet minecraftApplet)
+    {
+        showWindow(true);
 
-            try {
-                this.newApplet = minecraftApplet;
-                Method method = ReflectionHelper.findMethod(this.appletClass, this.newApplet, new String[]{"fmlInitReentry"});
-                method.setAccessible(true);
-                method.invoke(this.newApplet);
-            } catch (Exception var11) {
+        if (minecraftApplet.getClass().getClassLoader() == classLoader)
+        {
+            if (popupWindow != null)
+            {
+                popupWindow.setVisible(false);
+                popupWindow.dispose();
+            }
+            try
+            {
+                newApplet = minecraftApplet;
+                appletClass = ReflectionHelper.getClass(classLoader, "net.minecraft.client.MinecraftApplet");
+                ReflectionHelper.findMethod(appletClass, newApplet, new String[] { "fmlInitReentry" }).invoke(newApplet);
+                return;
+            }
+            catch (Exception e)
+            {
                 System.out.println("FMLRelauncher.relaunchApplet");
-                var11.printStackTrace();
-                throw new RuntimeException(var11);
+                e.printStackTrace();
+                throw new RuntimeException(e);
             }
-        } else {
-            System.out.println(minecraftApplet.getClass().getClassLoader().getClass().getName());
-            File mcDir = this.computeExistingClientHome();
-            this.setupHome(mcDir);
-            this.setupNewClientHome(mcDir);
-            Class<? super Object> parentAppletClass = ReflectionHelper.getClass(this.getClass().getClassLoader(), "java.applet.Applet");
+        }
 
-            try {
-                this.newApplet = this.classLoader.loadClass(this.appletClass.getName())
-                        .getDeclaredConstructor()
-                        .newInstance();
-                ((IMinecraftApplet)this.newApplet).setRelaunched(true);
-                AppletLauncher appletContainer = (AppletLauncher) minecraftApplet.getParent();
-                String launcherClassName = System.getProperty("minecraft.applet.WrapperClass", "net.minecraft.Launcher");
-                Class<? super Object> launcherClass = ReflectionHelper.getClass(this.getClass().getClassLoader(), launcherClassName);
-                if (!launcherClass.isInstance(appletContainer)) {
-                    FMLRelaunchLog.severe("Found unknown applet parent %s, unable to inject!\n", appletContainer.getClass().getName());
-                    throw new RuntimeException();
-                }
+        File mcDir = computeExistingClientHome();
+        setupHome(mcDir);
+        setupNewClientHome(mcDir);
 
-                appletContainer.removeAll();
-                appletContainer.replace((Applet) this.newApplet);
-            } catch (Exception var12) {
-                var12.printStackTrace();
-                throw new RuntimeException(var12);
-            } finally {
-                if (this.popupWindow != null) {
-                    this.popupWindow.setVisible(false);
-                    this.popupWindow.dispose();
-                }
+        Class<? super Object> parentAppletClass = ReflectionHelper.getClass(getClass().getClassLoader(), "java.applet.Applet");
 
+        try
+        {
+            appletClass = ReflectionHelper.getClass(classLoader, "net.minecraft.client.MinecraftApplet");
+            newApplet = appletClass.newInstance();
+            Object appletContainer = ReflectionHelper.getPrivateValue(ReflectionHelper.getClass(getClass().getClassLoader(), "java.awt.Component"),
+                    minecraftApplet, "parent");
+
+            String launcherClassName = System.getProperty("minecraft.applet.WrapperClass", "net.minecraft.Launcher");
+            Class<? super Object> launcherClass = ReflectionHelper.getClass(getClass().getClassLoader(), launcherClassName);
+            if (launcherClass.isInstance(appletContainer))
+            {
+                ReflectionHelper.findMethod(ReflectionHelper.getClass(getClass().getClassLoader(), "java.awt.Container"), minecraftApplet,
+                        new String[] { "removeAll" }).invoke(appletContainer);
+                ReflectionHelper.findMethod(launcherClass, appletContainer, new String[] { "replace" }, parentAppletClass).invoke(appletContainer, newApplet);
             }
-
+            else
+            {
+                FMLRelaunchLog.severe("Found unknown applet parent %s, unable to inject!\n", appletContainer.getClass().getName());
+                throw new RuntimeException();
+            }
+        }
+        catch (Exception e)
+        {
+            throw new RuntimeException(e);
+        }
+        finally
+        {
+            if (popupWindow != null)
+            {
+                popupWindow.setVisible(false);
+                popupWindow.dispose();
+            }
         }
     }
 
-    public static void appletStart(Applet applet) {
+    public static void appletStart(Applet applet)
+    {
         instance().startApplet(applet);
     }
 
-    private void startApplet(Applet applet) {
-        if (applet.getClass().getClassLoader() == this.classLoader) {
-            if (this.popupWindow != null) {
-                this.popupWindow.setVisible(false);
-                this.popupWindow.dispose();
+    private void startApplet(Applet applet)
+    {
+        if (applet.getClass().getClassLoader() == classLoader)
+        {
+            if (popupWindow != null)
+            {
+                popupWindow.setVisible(false);
+                popupWindow.dispose();
             }
-
-            if (RelaunchLibraryManager.downloadMonitor.shouldStopIt()) {
+            if (RelaunchLibraryManager.downloadMonitor.shouldStopIt())
+            {
                 System.exit(1);
             }
-
-            try {
-                ReflectionHelper.findMethod(this.appletClass, this.newApplet, new String[]{"fmlStartReentry"}).invoke(this.newApplet);
-            } catch (Exception var3) {
+            try
+            {
+                ReflectionHelper.findMethod(appletClass, newApplet, new String[] { "fmlStartReentry" }).invoke(newApplet);
+            }
+            catch (Exception e)
+            {
                 System.out.println("FMLRelauncher.startApplet");
-                var3.printStackTrace();
-                throw new RuntimeException(var3);
+                e.printStackTrace();
+                throw new RuntimeException(e);
             }
         }
-
+        return;
     }
 
-    public static String side() {
+    public static String side()
+    {
         return side;
     }
 }

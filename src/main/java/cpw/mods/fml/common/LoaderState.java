@@ -1,54 +1,100 @@
+/*
+ * Forge Mod Loader
+ * Copyright (c) 2012-2013 cpw.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the GNU Lesser Public License v2.1
+ * which accompanies this distribution, and is available at
+ * http://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ * 
+ * Contributors:
+ *     cpw - implementation
+ */
+
 package cpw.mods.fml.common;
 
 import com.google.common.base.Throwables;
-import cpw.mods.fml.common.event.*;
 
-public enum LoaderState {
-    NOINIT("Uninitialized", (Class)null),
-    LOADING("Loading", (Class)null),
-    CONSTRUCTING("Constructing mods", FMLConstructionEvent.class),
+import cpw.mods.fml.common.event.FMLConstructionEvent;
+import cpw.mods.fml.common.event.FMLEvent;
+import cpw.mods.fml.common.event.FMLInitializationEvent;
+import cpw.mods.fml.common.event.FMLLoadCompleteEvent;
+import cpw.mods.fml.common.event.FMLPostInitializationEvent;
+import cpw.mods.fml.common.event.FMLPreInitializationEvent;
+import cpw.mods.fml.common.event.FMLServerAboutToStartEvent;
+import cpw.mods.fml.common.event.FMLServerStartedEvent;
+import cpw.mods.fml.common.event.FMLServerStartingEvent;
+import cpw.mods.fml.common.event.FMLServerStoppedEvent;
+import cpw.mods.fml.common.event.FMLServerStoppingEvent;
+import cpw.mods.fml.common.event.FMLStateEvent;
+
+/**
+ * The state enum used to help track state progression for the loader
+ * @author cpw
+ *
+ */
+public enum LoaderState
+{
+    NOINIT("Uninitialized",null),
+    LOADING("Loading",null),
+    CONSTRUCTING("Constructing mods",FMLConstructionEvent.class),
     PREINITIALIZATION("Pre-initializing mods", FMLPreInitializationEvent.class),
     INITIALIZATION("Initializing mods", FMLInitializationEvent.class),
     POSTINITIALIZATION("Post-initializing mods", FMLPostInitializationEvent.class),
     AVAILABLE("Mod loading complete", FMLLoadCompleteEvent.class),
+    SERVER_ABOUT_TO_START("Server about to start", FMLServerAboutToStartEvent.class),
     SERVER_STARTING("Server starting", FMLServerStartingEvent.class),
     SERVER_STARTED("Server started", FMLServerStartedEvent.class),
     SERVER_STOPPING("Server stopping", FMLServerStoppingEvent.class),
-    ERRORED("Mod Loading errored", (Class)null);
+    SERVER_STOPPED("Server stopped", FMLServerStoppedEvent.class),
+    ERRORED("Mod Loading errored",null);
+
 
     private Class<? extends FMLStateEvent> eventClass;
     private String name;
 
-    private LoaderState(String name, Class event) {
+    private LoaderState(String name, Class<? extends FMLStateEvent> event)
+    {
         this.name = name;
         this.eventClass = event;
     }
 
-    public LoaderState transition(boolean errored) {
-        if (errored) {
+    public LoaderState transition(boolean errored)
+    {
+        if (errored)
+        {
             return ERRORED;
-        } else {
-            return this == SERVER_STOPPING ? AVAILABLE : values()[this.ordinal() < values().length ? this.ordinal() + 1 : this.ordinal()];
+        }
+        // stopping -> available
+        if (this == SERVER_STOPPED)
+        {
+            return AVAILABLE;
+        }
+        return values()[ordinal() < values().length ? ordinal()+1 : ordinal()];
+    }
+
+    public boolean hasEvent()
+    {
+        return eventClass != null;
+    }
+
+    public FMLStateEvent getEvent(Object... eventData)
+    {
+        try
+        {
+            return eventClass.getConstructor(Object[].class).newInstance((Object)eventData);
+        }
+        catch (Exception e)
+        {
+            throw Throwables.propagate(e);
         }
     }
-
-    public boolean hasEvent() {
-        return this.eventClass != null;
+    public LoaderState requiredState()
+    {
+        if (this == NOINIT) return NOINIT;
+        return LoaderState.values()[this.ordinal()-1];
     }
-
-    public FMLStateEvent getEvent(Object... eventData) {
-        try {
-            return (FMLStateEvent)this.eventClass.getConstructor(Object[].class).newInstance((Object)eventData);
-        } catch (Exception var3) {
-            throw Throwables.propagate(var3);
-        }
-    }
-
-    public LoaderState requiredState() {
-        return this == NOINIT ? NOINIT : values()[this.ordinal() - 1];
-    }
-
-    public static enum ModState {
+    public enum ModState
+    {
         UNLOADED("Unloaded"),
         LOADED("Loaded"),
         CONSTRUCTED("Constructed"),
@@ -61,11 +107,13 @@ public enum LoaderState {
 
         private String label;
 
-        private ModState(String label) {
+        private ModState(String label)
+        {
             this.label = label;
         }
 
-        public String toString() {
+        public String toString()
+        {
             return this.label;
         }
     }

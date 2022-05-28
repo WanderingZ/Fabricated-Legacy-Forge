@@ -1,14 +1,25 @@
-package cpw.mods.fml.common;
+/*
+ * Forge Mod Loader
+ * Copyright (c) 2012-2013 cpw.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the GNU Lesser Public License v2.1
+ * which accompanies this distribution, and is available at
+ * http://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ * 
+ * Contributors:
+ *     cpw - implementation
+ */
 
-import net.minecraft.nbt.NbtCompound;
-import net.minecraft.nbt.NbtElement;
-import net.minecraft.world.WorldSaveHandler;
-import net.minecraft.world.level.LevelProperties;
+package cpw.mods.fml.common;
 
 import java.util.Map;
 
-public interface WorldAccessContainer {
-    NbtCompound getDataForWriting(WorldSaveHandler arg, LevelProperties arg2);
+import net.minecraft.nbt.*;
+import net.minecraft.world.storage.*;
 
-    void readData(WorldSaveHandler arg, LevelProperties arg2, Map<String, NbtElement> map, NbtCompound arg3);
+
+public interface WorldAccessContainer
+{
+    public NBTTagCompound getDataForWriting(SaveHandler handler, WorldInfo info);
+    public void readData(SaveHandler handler, WorldInfo info, Map<String,NBTBase> propertyMap, NBTTagCompound tag);
 }

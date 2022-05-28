@@ -1,23 +1,38 @@
+/*
+ * Forge Mod Loader
+ * Copyright (c) 2012-2013 cpw.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the GNU Lesser Public License v2.1
+ * which accompanies this distribution, and is available at
+ * http://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ * 
+ * Contributors:
+ *     cpw - implementation
+ */
+
 package cpw.mods.fml.common.modloader;
 
-import cpw.mods.fml.common.network.EntitySpawnPacket;
-import cpw.mods.fml.common.registry.EntityRegistry;
 import net.minecraft.entity.Entity;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.network.Connection;
-import net.minecraft.network.listener.PacketListener;
-import net.minecraft.network.packet.c2s.play.CustomPayloadC2SPacket;
+import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.network.INetworkManager;
+import net.minecraft.network.packet.NetHandler;
+import net.minecraft.network.packet.Packet250CustomPayload;
+import cpw.mods.fml.common.network.EntitySpawnPacket;
+import cpw.mods.fml.common.registry.EntityRegistry.EntityRegistration;
 
-public interface IModLoaderSidedHelper {
-    void finishModLoading(ModLoaderModContainer modLoaderModContainer);
+public interface IModLoaderSidedHelper
+{
 
-    Object getClientGui(BaseModProxy baseModProxy, PlayerEntity arg, int i, int j, int k, int l);
+    void finishModLoading(ModLoaderModContainer mc);
 
-    Entity spawnEntity(BaseModProxy baseModProxy, EntitySpawnPacket entitySpawnPacket, EntityRegistry.EntityRegistration entityRegistration);
+    Object getClientGui(BaseModProxy mod, EntityPlayer player, int iD, int x, int y, int z);
 
-    void sendClientPacket(BaseModProxy baseModProxy, CustomPayloadC2SPacket arg);
+    Entity spawnEntity(BaseModProxy mod, EntitySpawnPacket input, EntityRegistration registration);
 
-    void clientConnectionOpened(PacketListener arg, Connection arg2, BaseModProxy baseModProxy);
+    void sendClientPacket(BaseModProxy mod, Packet250CustomPayload packet);
 
-    boolean clientConnectionClosed(Connection arg, BaseModProxy baseModProxy);
+    void clientConnectionOpened(NetHandler netClientHandler, INetworkManager manager, BaseModProxy mod);
+
+    boolean clientConnectionClosed(INetworkManager manager, BaseModProxy mod);
+
 }

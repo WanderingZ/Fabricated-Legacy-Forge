@@ -1,75 +1,112 @@
-package cpw.mods.fml.common.registry;
+/*
+ * Forge Mod Loader
+ * Copyright (c) 2012-2013 cpw.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the GNU Lesser Public License v2.1
+ * which accompanies this distribution, and is available at
+ * http://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ * 
+ * Contributors:
+ *     cpw - implementation
+ */
 
-import com.google.common.collect.Queues;
-import cpw.mods.fml.common.IScheduledTickHandler;
-import cpw.mods.fml.common.ITickHandler;
-import cpw.mods.fml.common.Side;
-import cpw.mods.fml.common.SingleIntervalHandler;
+package cpw.mods.fml.common.registry;
 
 import java.util.List;
 import java.util.PriorityQueue;
 import java.util.concurrent.atomic.AtomicLong;
 
-public class TickRegistry {
-    private static PriorityQueue<TickRegistry.TickQueueElement> clientTickHandlers = Queues.newPriorityQueue();
-    private static PriorityQueue<TickRegistry.TickQueueElement> serverTickHandlers = Queues.newPriorityQueue();
+import com.google.common.collect.Queues;
+
+import cpw.mods.fml.common.IScheduledTickHandler;
+import cpw.mods.fml.common.ITickHandler;
+import cpw.mods.fml.common.SingleIntervalHandler;
+import cpw.mods.fml.relauncher.Side;
+
+public class TickRegistry
+{
+
+    /**
+     * We register our delegate here
+     * @param handler
+     */
+
+    public static class TickQueueElement implements Comparable<TickQueueElement>
+    {
+        public TickQueueElement(IScheduledTickHandler ticker, long tickCounter)
+        {
+            this.ticker = ticker;
+            update(tickCounter);
+        }
+        @Override
+        public int compareTo(TickQueueElement o)
+        {
+            return (int)(next - o.next);
+        }
+
+        public void update(long tickCounter)
+        {
+            next = tickCounter + Math.max(ticker.nextTickSpacing(),1);
+        }
+
+        private long next;
+        public IScheduledTickHandler ticker;
+
+        public boolean scheduledNow(long tickCounter)
+        {
+            return tickCounter >= next;
+        }
+    }
+
+    private static PriorityQueue<TickQueueElement> clientTickHandlers = Queues.newPriorityQueue();
+    private static PriorityQueue<TickQueueElement> serverTickHandlers = Queues.newPriorityQueue();
+
     private static AtomicLong clientTickCounter = new AtomicLong();
     private static AtomicLong serverTickCounter = new AtomicLong();
 
-    public TickRegistry() {
+    public static void registerScheduledTickHandler(IScheduledTickHandler handler, Side side)
+    {
+        getQueue(side).add(new TickQueueElement(handler, getCounter(side).get()));
     }
 
-    public static void registerScheduledTickHandler(IScheduledTickHandler handler, Side side) {
-        getQueue(side).add(new TickRegistry.TickQueueElement(handler, getCounter(side).get()));
-    }
-
-    private static PriorityQueue<TickRegistry.TickQueueElement> getQueue(Side side) {
+    /**
+     * @param side the side to get the tick queue for
+     * @return the queue for the effective side
+     */
+    private static PriorityQueue<TickQueueElement> getQueue(Side side)
+    {
         return side.isClient() ? clientTickHandlers : serverTickHandlers;
     }
 
-    private static AtomicLong getCounter(Side side) {
+    private static AtomicLong getCounter(Side side)
+    {
         return side.isClient() ? clientTickCounter : serverTickCounter;
     }
-
-    public static void registerTickHandler(ITickHandler handler, Side side) {
+    public static void registerTickHandler(ITickHandler handler, Side side)
+    {
         registerScheduledTickHandler(new SingleIntervalHandler(handler), side);
     }
 
-    public static void updateTickQueue(List<IScheduledTickHandler> ticks, Side side) {
-        synchronized(ticks) {
+    public static void updateTickQueue(List<IScheduledTickHandler> ticks, Side side)
+    {
+        synchronized (ticks)
+        {
             ticks.clear();
             long tick = getCounter(side).incrementAndGet();
-            PriorityQueue<TickRegistry.TickQueueElement> tickHandlers = getQueue(side);
+            PriorityQueue<TickQueueElement> tickHandlers = getQueue(side);
 
-            while(tickHandlers.size() != 0 && ((TickRegistry.TickQueueElement)tickHandlers.peek()).scheduledNow(tick)) {
-                TickRegistry.TickQueueElement tickQueueElement = (TickRegistry.TickQueueElement)tickHandlers.poll();
+            while (true)
+            {
+                if (tickHandlers.size()==0 || !tickHandlers.peek().scheduledNow(tick))
+                {
+                    break;
+                }
+                TickRegistry.TickQueueElement tickQueueElement  = tickHandlers.poll();
                 tickQueueElement.update(tick);
                 tickHandlers.offer(tickQueueElement);
                 ticks.add(tickQueueElement.ticker);
             }
-
         }
     }
 
-    public static class TickQueueElement implements Comparable<TickRegistry.TickQueueElement> {
-        private long next;
-        public IScheduledTickHandler ticker;
-
-        public TickQueueElement(IScheduledTickHandler ticker, long tickCounter) {
-            this.ticker = ticker;
-            this.update(tickCounter);
-        }
-
-        public int compareTo(TickRegistry.TickQueueElement o) {
-            return (int)(this.next - o.next);
-        }
-
-        public void update(long tickCounter) {
-            this.next = tickCounter + (long)Math.max(this.ticker.nextTickSpacing(), 1);
-        }
-
-        public boolean scheduledNow(long tickCounter) {
-            return tickCounter >= this.next;
-        }
-    }
 }

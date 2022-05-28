@@ -1,8 +1,24 @@
+/*
+ * Forge Mod Loader
+ * Copyright (c) 2012-2013 cpw.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the GNU Lesser Public License v2.1
+ * which accompanies this distribution, and is available at
+ * http://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * Contributors:
+ *     cpw - implementation
+ */
+
 package cpw.mods.fml.relauncher;
 
-import fr.catcore.fabricatedforge.utils.Constants;
-
-import java.io.*;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.FilenameFilter;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InterruptedIOException;
 import java.lang.reflect.Method;
 import java.net.MalformedURLException;
 import java.net.URL;
@@ -10,27 +26,50 @@ import java.net.URLConnection;
 import java.nio.ByteBuffer;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
+import java.nio.channels.FileChannel.MapMode;
 import java.security.MessageDigest;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.jar.Attributes;
-import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 import java.util.logging.Level;
 
-public class RelaunchLibraryManager {
-    private static String[] rootPlugins = new String[]{"cpw.mods.fml.relauncher.FMLCorePlugin", "net.minecraftforge.classloading.FMLForgePlugin"};
-    private static List<String> loadedLibraries = new ArrayList();
+import cpw.mods.fml.common.CertificateHelper;
+import cpw.mods.fml.relauncher.IFMLLoadingPlugin.MCVersion;
+import cpw.mods.fml.relauncher.IFMLLoadingPlugin.TransformerExclusions;
+
+public class RelaunchLibraryManager
+{
+    private static String[] rootPlugins =  { "cpw.mods.fml.relauncher.FMLCorePlugin" , "net.minecraftforge.classloading.FMLForgePlugin" };
+    private static List<String> loadedLibraries = new ArrayList<String>();
     private static Map<IFMLLoadingPlugin, File> pluginLocations;
     private static List<IFMLLoadingPlugin> loadPlugins;
     private static List<ILibrarySet> libraries;
-    private static final String HEXES = "0123456789abcdef";
-    private static ByteBuffer downloadBuffer = ByteBuffer.allocateDirect(4194304);
-    static IDownloadDisplay downloadMonitor;
+    private static boolean deobfuscatedEnvironment;
 
-    public RelaunchLibraryManager() {
-    }
+    public static void handleLaunch(File mcDir, RelaunchClassLoader actualClassLoader)
+    {
+        try
+        {
+            // Are we in a 'decompiled' environment?
+            byte[] bs = actualClassLoader.getClassBytes("net.minecraft.world.World");
+            if (bs != null)
+            {
+                FMLRelaunchLog.info("Managed to load a deobfuscated Minecraft name- we are in a deobfuscated environment. Skipping runtime deobfuscation");
+                deobfuscatedEnvironment = true;
+            }
+        }
+        catch (IOException e1)
+        {
+        }
 
-    public static void handleLaunch(File mcDir, RelaunchClassLoader actualClassLoader) {
+        if (!deobfuscatedEnvironment)
+        {
+            FMLRelaunchLog.fine("Enabling runtime deobfuscation");
+        }
         pluginLocations = new HashMap<IFMLLoadingPlugin, File>();
         loadPlugins = new ArrayList<IFMLLoadingPlugin>();
         libraries = new ArrayList<ILibrarySet>();
@@ -70,7 +109,7 @@ public class RelaunchLibraryManager {
             {
                 actualClassLoader.addTransformerExclusion(s);
                 Class<?> coreModClass = Class.forName(s, true, actualClassLoader);
-                IFMLLoadingPlugin.TransformerExclusions trExclusions = coreModClass.getAnnotation(IFMLLoadingPlugin.TransformerExclusions.class);
+                TransformerExclusions trExclusions = coreModClass.getAnnotation(IFMLLoadingPlugin.TransformerExclusions.class);
                 if (trExclusions!=null)
                 {
                     for (String st : trExclusions.value())
@@ -145,7 +184,7 @@ public class RelaunchLibraryManager {
                         {
                             FileInputStream fis = new FileInputStream(libFile);
                             FileChannel chan = fis.getChannel();
-                            MappedByteBuffer mappedFile = chan.map(FileChannel.MapMode.READ_ONLY, 0, libFile.length());
+                            MappedByteBuffer mappedFile = chan.map(MapMode.READ_ONLY, 0, libFile.length());
                             String fileChecksum = generateChecksum(mappedFile);
                             fis.close();
                             // bad checksum and I did not download this file
@@ -165,11 +204,11 @@ public class RelaunchLibraryManager {
 
                     if (!download)
                     {
-                        downloadMonitor.updateProgressString("Found library file %s present and correct in lib dir\n", libName);
+                        downloadMonitor.updateProgressString("Found library file %s present and correct in lib dir", libName);
                     }
                     else
                     {
-                        downloadMonitor.updateProgressString("Library file %s was downloaded and verified successfully\n", libName);
+                        downloadMonitor.updateProgressString("Library file %s was downloaded and verified successfully", libName);
                     }
 
                     try
@@ -193,9 +232,9 @@ public class RelaunchLibraryManager {
             if (!caughtErrors.isEmpty())
             {
                 FMLRelaunchLog.severe("There were errors during initial FML setup. " +
-                        "Some files failed to download or were otherwise corrupted. " +
-                        "You will need to manually obtain the following files from " +
-                        "these download links and ensure your lib directory is clean. ");
+                		"Some files failed to download or were otherwise corrupted. " +
+                		"You will need to manually obtain the following files from " +
+                		"these download links and ensure your lib directory is clean. ");
                 for (ILibrarySet set : libraries)
                 {
                     for (String file : set.getLibraries())
@@ -205,7 +244,7 @@ public class RelaunchLibraryManager {
                 }
                 FMLRelaunchLog.severe("<===========>");
                 FMLRelaunchLog.severe("The following is the errors that caused the setup to fail. " +
-                        "They may help you diagnose and resolve the issue");
+                		"They may help you diagnose and resolve the issue");
                 for (Throwable t : caughtErrors)
                 {
                     if (t.getMessage()!=null)
@@ -233,11 +272,16 @@ public class RelaunchLibraryManager {
                 }
             }
         }
-
+        // Deobfuscation transformer, always last
+        if (!deobfuscatedEnvironment)
+        {
+            actualClassLoader.registerTransformer("cpw.mods.fml.common.asm.transformers.DeobfuscationTransformer");
+        }
         downloadMonitor.updateProgressString("Running coremod plugins");
         Map<String,Object> data = new HashMap<String,Object>();
         data.put("mcLocation", mcDir);
         data.put("coremodList", loadPlugins);
+        data.put("runtimeDeobfuscationEnabled", !deobfuscatedEnvironment);
         for (IFMLLoadingPlugin plugin : loadPlugins)
         {
             downloadMonitor.updateProgressString("Running coremod plugin %s", plugin.getClass().getSimpleName());
@@ -250,7 +294,10 @@ public class RelaunchLibraryManager {
                 {
                     IFMLCallHook call = (IFMLCallHook) Class.forName(setupClass, true, actualClassLoader).newInstance();
                     Map<String,Object> callData = new HashMap<String, Object>();
+                    callData.put("mcLocation", mcDir);
                     callData.put("classLoader", actualClassLoader);
+                    callData.put("coremodLocation", pluginLocations.get(plugin));
+                    callData.put("deobfuscationFileName", FMLInjectionData.debfuscationDataName());
                     call.injectData(callData);
                     call.call();
                 }
@@ -286,7 +333,8 @@ public class RelaunchLibraryManager {
         }
     }
 
-    private static void discoverCoreMods(File mcDir, RelaunchClassLoader classLoader, List<IFMLLoadingPlugin> loadPlugins, List<ILibrarySet> libraries) {
+    private static void discoverCoreMods(File mcDir, RelaunchClassLoader classLoader, List<IFMLLoadingPlugin> loadPlugins, List<ILibrarySet> libraries)
+    {
         downloadMonitor.updateProgressString("Discovering coremods");
         File coreMods = setupCoreModDir(mcDir);
         FilenameFilter ff = new FilenameFilter()
@@ -308,6 +356,11 @@ public class RelaunchLibraryManager {
             try
             {
                 jar = new JarFile(coreMod);
+                if (jar.getManifest() == null)
+                {
+                    FMLRelaunchLog.warning("Found an un-manifested jar file in the coremods folder : %s, it will be ignored.", coreMod.getName());
+                    continue;
+                }
                 mfAttributes = jar.getManifest().getMainAttributes();
             }
             catch (IOException ioe)
@@ -340,7 +393,6 @@ public class RelaunchLibraryManager {
 //            {
 //                // didn't find it, good
 //            }
-
             try
             {
                 classLoader.addURL(coreMod.toURI().toURL());
@@ -355,7 +407,26 @@ public class RelaunchLibraryManager {
                 downloadMonitor.updateProgressString("Loading coremod %s", coreMod.getName());
                 classLoader.addTransformerExclusion(fmlCorePlugin);
                 Class<?> coreModClass = Class.forName(fmlCorePlugin, true, classLoader);
-                IFMLLoadingPlugin.TransformerExclusions trExclusions = coreModClass.getAnnotation(IFMLLoadingPlugin.TransformerExclusions.class);
+                MCVersion requiredMCVersion = coreModClass.getAnnotation(IFMLLoadingPlugin.MCVersion.class);
+                String version = "";
+                if (requiredMCVersion == null)
+                {
+                    FMLRelaunchLog.log(Level.WARNING, "The coremod %s does not have a MCVersion annotation, it may cause issues with this version of Minecraft", fmlCorePlugin);
+                }
+                else
+                {
+                    version = requiredMCVersion.value();
+                }
+                if (!"".equals(version) && !FMLInjectionData.mccversion.equals(version))
+                {
+                    FMLRelaunchLog.log(Level.SEVERE, "The coremod %s is requesting minecraft version %s and minecraft is %s. It will be ignored.", fmlCorePlugin, version, FMLInjectionData.mccversion);
+                    continue;
+                }
+                else if (!"".equals(version))
+                {
+                    FMLRelaunchLog.log(Level.FINE, "The coremod %s requested minecraft version %s and minecraft is %s. It will be loaded.", fmlCorePlugin, version, FMLInjectionData.mccversion);
+                }
+                TransformerExclusions trExclusions = coreModClass.getAnnotation(IFMLLoadingPlugin.TransformerExclusions.class);
                 if (trExclusions!=null)
                 {
                     for (String st : trExclusions.value())
@@ -394,76 +465,100 @@ public class RelaunchLibraryManager {
         }
     }
 
-    private static File setupLibDir(File mcDir) {
-        File libDir = new File(mcDir, "lib");
-
-        try {
+    /**
+     * @param mcDir the minecraft home directory
+     * @return the lib directory
+     */
+    private static File setupLibDir(File mcDir)
+    {
+        File libDir = new File(mcDir,"lib");
+        try
+        {
             libDir = libDir.getCanonicalFile();
-        } catch (IOException var3) {
-            throw new RuntimeException(String.format("Unable to canonicalize the lib dir at %s", mcDir.getName()), var3);
         }
-
-        if (!libDir.exists()) {
+        catch (IOException e)
+        {
+            throw new RuntimeException(String.format("Unable to canonicalize the lib dir at %s", mcDir.getName()),e);
+        }
+        if (!libDir.exists())
+        {
             libDir.mkdir();
-        } else if (libDir.exists() && !libDir.isDirectory()) {
+        }
+        else if (libDir.exists() && !libDir.isDirectory())
+        {
             throw new RuntimeException(String.format("Found a lib file in %s that's not a directory", mcDir.getName()));
         }
-
         return libDir;
     }
 
-    private static File setupCoreModDir(File mcDir) {
-        File coreModDir = new File(mcDir, "coremods");
-
-        try {
+    /**
+     * @param mcDir the minecraft home directory
+     * @return the coremod directory
+     */
+    private static File setupCoreModDir(File mcDir)
+    {
+        File coreModDir = new File(mcDir,"coremods");
+        try
+        {
             coreModDir = coreModDir.getCanonicalFile();
-        } catch (IOException var3) {
-            throw new RuntimeException(String.format("Unable to canonicalize the coremod dir at %s", mcDir.getName()), var3);
         }
-
-        if (!coreModDir.exists()) {
+        catch (IOException e)
+        {
+            throw new RuntimeException(String.format("Unable to canonicalize the coremod dir at %s", mcDir.getName()),e);
+        }
+        if (!coreModDir.exists())
+        {
             coreModDir.mkdir();
-        } else if (coreModDir.exists() && !coreModDir.isDirectory()) {
+        }
+        else if (coreModDir.exists() && !coreModDir.isDirectory())
+        {
             throw new RuntimeException(String.format("Found a coremod file in %s that's not a directory", mcDir.getName()));
         }
-
-        return Constants.REMAPPED_COREMODS_FOLDER;
+        return coreModDir;
     }
 
-    private static void downloadFile(File libFile, String rootUrl, String realFilePath, String hash) {
-        try {
-            URL libDownload = new URL(String.format(rootUrl, realFilePath));
-            System.out.println("Downloading file: " + libDownload.getHost() + libDownload.getPath());
-            System.out.println("The libFile's path is " + libFile.getAbsolutePath());
-            String infoString = String.format("Downloading file %s", libDownload.toString());
-            downloadMonitor.updateProgressString(infoString, new Object[0]);
-            FMLRelaunchLog.info(infoString, new Object[0]);
+    private static void downloadFile(File libFile, String rootUrl,String realFilePath, String hash)
+    {
+        try
+        {
+            URL libDownload = new URL(String.format(rootUrl,realFilePath));
+            downloadMonitor.updateProgressString("Downloading file %s", libDownload.toString());
+            FMLRelaunchLog.info("Downloading file %s", libDownload.toString());
             URLConnection connection = libDownload.openConnection();
             connection.setConnectTimeout(5000);
             connection.setReadTimeout(5000);
             connection.setRequestProperty("User-Agent", "FML Relaunch Downloader");
             int sizeGuess = connection.getContentLength();
             performDownload(connection.getInputStream(), sizeGuess, hash, libFile);
-            downloadMonitor.updateProgressString("Download complete", new Object[0]);
-            FMLRelaunchLog.info("Download complete", new Object[0]);
-        } catch (Exception var8) {
-            if (downloadMonitor.shouldStopIt()) {
-                FMLRelaunchLog.warning("You have stopped the downloading operation before it could complete", new Object[0]);
-            } else if (var8 instanceof RuntimeException) {
-                throw (RuntimeException) var8;
-            } else {
-                FMLRelaunchLog.severe("There was a problem downloading the file %s automatically. Perhaps you have an environment without internet access. You will need to download the file manually or restart and let it try again\n", new Object[]{libFile.getName()});
-                libFile.delete();
-                throw new RuntimeException("A download error occured", var8);
+            downloadMonitor.updateProgressString("Download complete");
+            FMLRelaunchLog.info("Download complete");
+        }
+        catch (Exception e)
+        {
+            if (downloadMonitor.shouldStopIt())
+            {
+                FMLRelaunchLog.warning("You have stopped the downloading operation before it could complete");
+                return;
             }
+            if (e instanceof RuntimeException) throw (RuntimeException)e;
+            FMLRelaunchLog.severe("There was a problem downloading the file %s automatically. Perhaps you " +
+            		"have an environment without internet access. You will need to download " +
+            		"the file manually or restart and let it try again\n", libFile.getName());
+            libFile.delete();
+            throw new RuntimeException("A download error occured", e);
         }
     }
 
-    public static List<String> getLibraries() {
+    public static List<String> getLibraries()
+    {
         return loadedLibraries;
     }
 
-    private static void performDownload(InputStream is, int sizeGuess, String validationHash, File target) {
+    private static ByteBuffer downloadBuffer = ByteBuffer.allocateDirect(1 << 23);
+    static IDownloadDisplay downloadMonitor;
+
+    private static void performDownload(InputStream is, int sizeGuess, String validationHash, File target)
+    {
         if (sizeGuess > downloadBuffer.capacity())
         {
             throw new RuntimeException(String.format("The file %s is too large to be downloaded by FML - the coremod is invalid", target.getName()));
@@ -523,24 +618,13 @@ public class RelaunchLibraryManager {
             if (e instanceof RuntimeException) throw (RuntimeException)e;
             throw new RuntimeException(e);
         }
+
+
+
     }
 
-    private static String generateChecksum(ByteBuffer buffer) {
-        try
-        {
-            MessageDigest digest = MessageDigest.getInstance("SHA-1");
-            digest.update(buffer);
-            byte[] chksum = digest.digest();
-            final StringBuilder hex = new StringBuilder( 2 * chksum.length );
-            for ( final byte b : chksum ) {
-                hex.append(HEXES.charAt((b & 0xF0) >> 4))
-                        .append(HEXES.charAt((b & 0x0F)));
-            }
-            return hex.toString();
-        }
-        catch (Exception e)
-        {
-            return null;
-        }
+    private static String generateChecksum(ByteBuffer buffer)
+    {
+        return CertificateHelper.getFingerprint(buffer);
     }
 }

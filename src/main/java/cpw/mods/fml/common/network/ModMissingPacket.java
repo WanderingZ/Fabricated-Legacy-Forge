@@ -1,31 +1,50 @@
+/*
+ * Forge Mod Loader
+ * Copyright (c) 2012-2013 cpw.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the GNU Lesser Public License v2.1
+ * which accompanies this distribution, and is available at
+ * http://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ * 
+ * Contributors:
+ *     cpw - implementation
+ */
+
 package cpw.mods.fml.common.network;
 
+import java.util.List;
+
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableList.Builder;
 import com.google.common.collect.Lists;
 import com.google.common.io.ByteArrayDataInput;
 import com.google.common.io.ByteArrayDataOutput;
 import com.google.common.io.ByteStreams;
+
 import cpw.mods.fml.common.FMLCommonHandler;
 import cpw.mods.fml.common.Loader;
 import cpw.mods.fml.common.ModContainer;
 import cpw.mods.fml.common.versioning.ArtifactVersion;
 import cpw.mods.fml.common.versioning.DefaultArtifactVersion;
 import cpw.mods.fml.common.versioning.VersionRange;
-import net.minecraft.network.Connection;
-import net.minecraft.network.listener.PacketListener;
 
-import java.util.Iterator;
-import java.util.List;
+import net.minecraft.network.INetworkManager;
+import net.minecraft.network.packet.NetHandler;
 
-public class ModMissingPacket extends FMLPacket {
-    private List<ModMissingPacket.ModData> missing;
-    private List<ModMissingPacket.ModData> badVersion;
+public class ModMissingPacket extends FMLPacket
+{
 
-    public ModMissingPacket() {
+    private List<ModData> missing;
+    private List<ModData> badVersion;
+
+    public ModMissingPacket()
+    {
         super(Type.MOD_MISSING);
     }
 
-    public byte[] generatePacket(Object... data) {
+    @Override
+    public byte[] generatePacket(Object... data)
+    {
         ByteArrayDataOutput dat = ByteStreams.newDataOutput();
 
         List<String> missing = (List<String>) data[0];
@@ -48,38 +67,45 @@ public class ModMissingPacket extends FMLPacket {
         return dat.toByteArray();
     }
 
-    public FMLPacket consumePacket(byte[] data) {
+    private static class ModData
+    {
+        String modId;
+        String modVersion;
+    }
+    @Override
+    public FMLPacket consumePacket(byte[] data)
+    {
         ByteArrayDataInput dat = ByteStreams.newDataInput(data);
         int missingLen = dat.readInt();
-        this.missing = Lists.newArrayListWithCapacity(missingLen);
-
-        int badVerLength;
-        for(badVerLength = 0; badVerLength < missingLen; ++badVerLength) {
-            ModMissingPacket.ModData md = new ModMissingPacket.ModData();
+        missing = Lists.newArrayListWithCapacity(missingLen);
+        for (int i = 0; i < missingLen; i++)
+        {
+            ModData md = new ModData();
             md.modId = dat.readUTF();
             md.modVersion = dat.readUTF();
-            this.missing.add(md);
+            missing.add(md);
         }
-
-        badVerLength = dat.readInt();
-        this.badVersion = Lists.newArrayListWithCapacity(badVerLength);
-
-        for(int i = 0; i < badVerLength; ++i) {
-            ModMissingPacket.ModData md = new ModMissingPacket.ModData();
+        int badVerLength = dat.readInt();
+        badVersion = Lists.newArrayListWithCapacity(badVerLength);
+        for (int i = 0; i < badVerLength; i++)
+        {
+            ModData md = new ModData();
             md.modId = dat.readUTF();
             md.modVersion = dat.readUTF();
-            this.badVersion.add(md);
+            badVersion.add(md);
         }
-
         return this;
     }
 
-    public void execute(Connection network, FMLNetworkHandler handler, PacketListener netHandler, String userName) {
+    @Override
+    public void execute(INetworkManager network, FMLNetworkHandler handler, NetHandler netHandler, String userName)
+    {
         FMLCommonHandler.instance().getSidedDelegate().displayMissingMods(this);
     }
 
-    public List<ArtifactVersion> getModList() {
-        ImmutableList.Builder<ArtifactVersion> builder = ImmutableList.<ArtifactVersion>builder();
+    public List<ArtifactVersion> getModList()
+    {
+        Builder<ArtifactVersion> builder = ImmutableList.<ArtifactVersion>builder();
         for (ModData md : missing)
         {
             builder.add(new DefaultArtifactVersion(md.modId, VersionRange.createFromVersion(md.modVersion, null)));
@@ -91,11 +117,4 @@ public class ModMissingPacket extends FMLPacket {
         return builder.build();
     }
 
-    private static class ModData {
-        String modId;
-        String modVersion;
-
-        private ModData() {
-        }
-    }
 }

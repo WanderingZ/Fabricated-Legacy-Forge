@@ -1,24 +1,16 @@
-package cpw.mods.fml.common.modloader;
+/*
+ * Forge Mod Loader
+ * Copyright (c) 2012-2013 cpw.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the GNU Lesser Public License v2.1
+ * which accompanies this distribution, and is available at
+ * http://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * Contributors:
+ *     cpw - implementation
+ */
 
-import com.google.common.base.Strings;
-import com.google.common.base.Throwables;
-import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Lists;
-import com.google.common.collect.Sets;
-import com.google.common.eventbus.EventBus;
-import com.google.common.eventbus.Subscribe;
-import cpw.mods.fml.common.*;
-import cpw.mods.fml.common.discovery.ASMDataTable;
-import cpw.mods.fml.common.discovery.ContainerType;
-import cpw.mods.fml.common.event.*;
-import cpw.mods.fml.common.network.FMLNetworkHandler;
-import cpw.mods.fml.common.network.NetworkRegistry;
-import cpw.mods.fml.common.registry.GameRegistry;
-import cpw.mods.fml.common.registry.TickRegistry;
-import cpw.mods.fml.common.versioning.ArtifactVersion;
-import cpw.mods.fml.common.versioning.DefaultArtifactVersion;
-import cpw.mods.fml.common.versioning.VersionRange;
-import net.minecraft.command.Command;
+package cpw.mods.fml.common.modloader;
 
 import java.io.File;
 import java.io.FileReader;
@@ -27,10 +19,57 @@ import java.io.IOException;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
-import java.util.*;
+import java.security.cert.Certificate;
+import java.util.ArrayList;
+import java.util.EnumSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
+import java.util.Set;
 import java.util.logging.Level;
 
-public class ModLoaderModContainer implements ModContainer {
+import net.minecraft.command.ICommand;
+
+import com.google.common.base.Strings;
+import com.google.common.base.Throwables;
+import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Lists;
+import com.google.common.collect.Sets;
+import com.google.common.eventbus.EventBus;
+import com.google.common.eventbus.Subscribe;
+
+import cpw.mods.fml.common.FMLCommonHandler;
+import cpw.mods.fml.common.FMLLog;
+import cpw.mods.fml.common.ILanguageAdapter;
+import cpw.mods.fml.common.LoadController;
+import cpw.mods.fml.common.Loader;
+import cpw.mods.fml.common.LoaderException;
+import cpw.mods.fml.common.MetadataCollection;
+import cpw.mods.fml.common.ModClassLoader;
+import cpw.mods.fml.common.ModContainer;
+import cpw.mods.fml.common.ModMetadata;
+import cpw.mods.fml.common.ProxyInjector;
+import cpw.mods.fml.common.TickType;
+import cpw.mods.fml.common.discovery.ASMDataTable;
+import cpw.mods.fml.common.discovery.ASMDataTable.ASMData;
+import cpw.mods.fml.common.discovery.ContainerType;
+import cpw.mods.fml.common.event.FMLConstructionEvent;
+import cpw.mods.fml.common.event.FMLInitializationEvent;
+import cpw.mods.fml.common.event.FMLLoadCompleteEvent;
+import cpw.mods.fml.common.event.FMLPostInitializationEvent;
+import cpw.mods.fml.common.event.FMLPreInitializationEvent;
+import cpw.mods.fml.common.event.FMLServerStartingEvent;
+import cpw.mods.fml.common.network.FMLNetworkHandler;
+import cpw.mods.fml.common.network.NetworkRegistry;
+import cpw.mods.fml.common.registry.GameRegistry;
+import cpw.mods.fml.common.registry.TickRegistry;
+import cpw.mods.fml.common.versioning.ArtifactVersion;
+import cpw.mods.fml.common.versioning.DefaultArtifactVersion;
+import cpw.mods.fml.common.versioning.VersionRange;
+import cpw.mods.fml.relauncher.Side;
+
+public class ModLoaderModContainer implements ModContainer
+{
     public BaseModProxy mod;
     private File modSource;
     public Set<ArtifactVersion> requirements = Sets.newHashSet();
@@ -49,22 +88,31 @@ public class ModLoaderModContainer implements ModContainer {
     private String sortingProperties;
     private ArtifactVersion processedVersion;
     private boolean isNetworkMod;
-    private List<Command> serverCommands = Lists.newArrayList();
+    private List<ICommand> serverCommands = Lists.newArrayList();
 
-    public ModLoaderModContainer(String className, File modSource, String sortingProperties) {
+    public ModLoaderModContainer(String className, File modSource, String sortingProperties)
+    {
         this.modClazzName = className;
         this.modSource = modSource;
-        this.modId = className.contains(".") ? className.substring(className.lastIndexOf(46) + 1) : className;
+        this.modId = className.contains(".") ? className.substring(className.lastIndexOf('.')+1) : className;
         this.sortingProperties = Strings.isNullOrEmpty(sortingProperties) ? "" : sortingProperties;
     }
 
+    /**
+     * We only instantiate this for "not mod mods"
+     * @param instance
+     */
     ModLoaderModContainer(BaseModProxy instance) {
-        this.mod = instance;
+        this.mod=instance;
         this.gameTickHandler = new BaseModTicker(instance, false);
         this.guiTickHandler = new BaseModTicker(instance, true);
     }
 
-    private void configureMod(Class<? extends BaseModProxy> modClazz, ASMDataTable asmData) {
+    /**
+     *
+     */
+    private void configureMod(Class<? extends BaseModProxy> modClazz, ASMDataTable asmData)
+    {
         File configDir = Loader.instance().getConfigDir();
         File modConfig = new File(configDir, String.format("%s.cfg", getModId()));
         Properties props = new Properties();
@@ -96,7 +144,7 @@ public class ModLoaderModContainer implements ModContainer {
         List<ModProperty> mlPropFields = Lists.newArrayList();
         try
         {
-            for (ASMDataTable.ASMData dat : Sets.union(asmData.getAnnotationsFor(this).get("net.minecraft.src.MLProp"), asmData.getAnnotationsFor(this).get("MLProp")))
+            for (ASMData dat : Sets.union(asmData.getAnnotationsFor(this).get("net.minecraft.src.MLProp"), asmData.getAnnotationsFor(this).get("MLProp")))
             {
                 if (dat.getClassName().equals(modClazzName))
                 {
@@ -211,82 +259,103 @@ public class ModLoaderModContainer implements ModContainer {
         }
     }
 
-    private Object parseValue(String val, ModProperty property, Class<?> type, String propertyName) {
-        if (type.isAssignableFrom(String.class)) {
-            return val;
-        } else if (!type.isAssignableFrom(Boolean.TYPE) && !type.isAssignableFrom(Boolean.class)) {
-            if (!Number.class.isAssignableFrom(type) && !type.isPrimitive()) {
-                throw new IllegalArgumentException(String.format("MLProp declared on %s of type %s, an unsupported type", propertyName, type.getName()));
-            } else {
-                Number n = null;
-                if (!type.isAssignableFrom(Double.TYPE) && !Double.class.isAssignableFrom(type)) {
-                    if (!type.isAssignableFrom(Float.TYPE) && !Float.class.isAssignableFrom(type)) {
-                        if (!type.isAssignableFrom(Long.TYPE) && !Long.class.isAssignableFrom(type)) {
-                            if (!type.isAssignableFrom(Integer.TYPE) && !Integer.class.isAssignableFrom(type)) {
-                                if (!type.isAssignableFrom(Short.TYPE) && !Short.class.isAssignableFrom(type)) {
-                                    if (!type.isAssignableFrom(Byte.TYPE) && !Byte.class.isAssignableFrom(type)) {
-                                        throw new IllegalArgumentException(String.format("MLProp declared on %s of type %s, an unsupported type", propertyName, type.getName()));
-                                    }
-
-                                    n = Byte.parseByte(val);
-                                } else {
-                                    n = Short.parseShort(val);
-                                }
-                            } else {
-                                n = Integer.parseInt(val);
-                            }
-                        } else {
-                            n = Long.parseLong(val);
-                        }
-                    } else {
-                        n = Float.parseFloat(val);
-                    }
-                } else {
-                    n = Double.parseDouble(val);
-                }
-
-                double dVal = ((Number)n).doubleValue();
-                if (property.min() != Double.MIN_VALUE && dVal < property.min() || property.max() != Double.MAX_VALUE && dVal > property.max()) {
-                    FMLLog.warning("Configuration for %s.%s found value %s outside acceptable range %s,%s", new Object[]{this.modClazzName, propertyName, n, property.min(), property.max()});
-                    return null;
-                } else {
-                    return n;
-                }
-            }
-        } else {
+    private Object parseValue(String val, ModProperty property, Class<?> type, String propertyName)
+    {
+        if (type.isAssignableFrom(String.class))
+        {
+            return (String)val;
+        }
+        else if (type.isAssignableFrom(Boolean.TYPE) || type.isAssignableFrom(Boolean.class))
+        {
             return Boolean.parseBoolean(val);
         }
-    }
+        else if (Number.class.isAssignableFrom(type) || type.isPrimitive())
+        {
+            Number n = null;
 
-    private String extractValue(Object value) {
-        if (String.class.isInstance(value)) {
+            if (type.isAssignableFrom(Double.TYPE) || Double.class.isAssignableFrom(type))
+            {
+                n = Double.parseDouble(val);
+            }
+            else if (type.isAssignableFrom(Float.TYPE) || Float.class.isAssignableFrom(type))
+            {
+                n = Float.parseFloat(val);
+            }
+            else if (type.isAssignableFrom(Long.TYPE) || Long.class.isAssignableFrom(type))
+            {
+                n = Long.parseLong(val);
+            }
+            else if (type.isAssignableFrom(Integer.TYPE) || Integer.class.isAssignableFrom(type))
+            {
+                n = Integer.parseInt(val);
+            }
+            else if (type.isAssignableFrom(Short.TYPE) || Short.class.isAssignableFrom(type))
+            {
+                n = Short.parseShort(val);
+            }
+            else if (type.isAssignableFrom(Byte.TYPE) || Byte.class.isAssignableFrom(type))
+            {
+                n = Byte.parseByte(val);
+            }
+            else
+            {
+                throw new IllegalArgumentException(String.format("MLProp declared on %s of type %s, an unsupported type",propertyName, type.getName()));
+            }
+
+            double dVal = n.doubleValue();
+            if ((property.min()!=Double.MIN_VALUE && dVal < property.min()) || (property.max()!=Double.MAX_VALUE && dVal > property.max()))
+            {
+                FMLLog.warning("Configuration for %s.%s found value %s outside acceptable range %s,%s", modClazzName,propertyName, n, property.min(), property.max());
+                return null;
+            }
+            else
+            {
+                return n;
+            }
+        }
+
+        throw new IllegalArgumentException(String.format("MLProp declared on %s of type %s, an unsupported type",propertyName, type.getName()));
+    }
+    private String extractValue(Object value)
+    {
+        if (String.class.isInstance(value))
+        {
             return (String)value;
-        } else if (!Number.class.isInstance(value) && !Boolean.class.isInstance(value)) {
-            throw new IllegalArgumentException("MLProp declared on non-standard type");
-        } else {
+        }
+        else if (Number.class.isInstance(value) || Boolean.class.isInstance(value))
+        {
             return String.valueOf(value);
+        }
+        else
+        {
+            throw new IllegalArgumentException("MLProp declared on non-standard type");
         }
     }
 
-    public String getName() {
-        return this.mod != null ? this.mod.getName() : this.modId;
+    @Override
+    public String getName()
+    {
+        return mod != null ? mod.getName() : modId;
     }
 
-    /** @deprecated */
-    @Deprecated
-    public static ModContainer findContainerFor(BaseModProxy mod) {
-        return FMLCommonHandler.instance().findContainerFor(mod);
+    @Override
+    public String getSortingRules()
+    {
+        return sortingProperties;
     }
 
-    public String getSortingRules() {
-        return this.sortingProperties;
-    }
-
-    public boolean matches(Object mod) {
+    @Override
+    public boolean matches(Object mod)
+    {
         return this.mod == mod;
     }
 
-    public static <A extends BaseModProxy> List<A> findAll(Class<A> clazz) {
+    /**
+     * Find all the BaseMods in the system
+     * @param <A>
+     */
+    public static <A extends BaseModProxy> List<A> findAll(Class<A> clazz)
+    {
         ArrayList<A> modList = new ArrayList<A>();
 
         for (ModContainer mc : Loader.instance().getActiveModList())
@@ -300,186 +369,250 @@ public class ModLoaderModContainer implements ModContainer {
         return modList;
     }
 
-    public File getSource() {
-        return this.modSource;
+    @Override
+    public File getSource()
+    {
+        return modSource;
     }
 
-    public Object getMod() {
-        return this.mod;
+    @Override
+    public Object getMod()
+    {
+        return mod;
     }
 
-    public Set<ArtifactVersion> getRequirements() {
-        return this.requirements;
+    @Override
+    public Set<ArtifactVersion> getRequirements()
+    {
+        return requirements;
     }
 
-    public List<ArtifactVersion> getDependants() {
-        return this.dependants;
+    @Override
+    public List<ArtifactVersion> getDependants()
+    {
+        return dependants;
     }
 
-    public List<ArtifactVersion> getDependencies() {
-        return this.dependencies;
+    @Override
+    public List<ArtifactVersion> getDependencies()
+    {
+        return dependencies;
     }
 
-    public String toString() {
-        return this.modId;
+
+    public String toString()
+    {
+        return modId;
     }
 
-    public ModMetadata getMetadata() {
-        return this.metadata;
+    @Override
+    public ModMetadata getMetadata()
+    {
+        return metadata;
     }
 
-    public String getVersion() {
-        return this.mod != null && this.mod.getVersion() != null ? this.mod.getVersion() : "Not available";
+    @Override
+    public String getVersion()
+    {
+        if (mod == null || mod.getVersion() == null)
+        {
+            return "Not available";
+        }
+        return mod.getVersion();
     }
 
-    public BaseModTicker getGameTickHandler() {
+    public BaseModTicker getGameTickHandler()
+    {
         return this.gameTickHandler;
     }
 
-    public BaseModTicker getGUITickHandler() {
+    public BaseModTicker getGUITickHandler()
+    {
         return this.guiTickHandler;
     }
 
-    public String getModId() {
-        return this.modId;
+    @Override
+    public String getModId()
+    {
+        return modId;
     }
 
-    public void bindMetadata(MetadataCollection mc) {
+    @Override
+    public void bindMetadata(MetadataCollection mc)
+    {
         Map<String, Object> dummyMetadata = ImmutableMap.<String,Object>builder().put("name", modId).put("version", "1.0").build();
         this.metadata = mc.getMetadataForId(modId, dummyMetadata);
         Loader.instance().computeDependencies(sortingProperties, getRequirements(), getDependencies(), getDependants());
     }
 
-    public void setEnabledState(boolean enabled) {
+    @Override
+    public void setEnabledState(boolean enabled)
+    {
         this.enabled = enabled;
     }
 
-    public boolean registerBus(EventBus bus, LoadController controller) {
-        if (this.enabled) {
-            FMLLog.fine("Enabling mod %s", new Object[]{this.getModId()});
+    @Override
+    public boolean registerBus(EventBus bus, LoadController controller)
+    {
+        if (this.enabled)
+        {
+            FMLLog.fine("Enabling mod %s", getModId());
             this.bus = bus;
             this.controller = controller;
             bus.register(this);
             return true;
-        } else {
+        }
+        else
+        {
             return false;
         }
     }
 
+    // Lifecycle mod events
+
     @Subscribe
-    public void constructMod(FMLConstructionEvent event) {
-        try {
+    public void constructMod(FMLConstructionEvent event)
+    {
+        try
+        {
             ModClassLoader modClassLoader = event.getModClassLoader();
-            modClassLoader.addFile(this.modSource);
+            modClassLoader.addFile(modSource);
             EnumSet<TickType> ticks = EnumSet.noneOf(TickType.class);
             this.gameTickHandler = new BaseModTicker(ticks, false);
             this.guiTickHandler = new BaseModTicker(ticks.clone(), true);
-            Class<? extends BaseModProxy> modClazz = modClassLoader.loadBaseModClass(this.modClazzName);
-            this.configureMod(modClazz, event.getASMHarvestedData());
-            this.isNetworkMod = FMLNetworkHandler.instance().registerNetworkMod(this, modClazz, event.getASMHarvestedData());
+            Class<? extends BaseModProxy> modClazz = (Class<? extends BaseModProxy>) modClassLoader.loadBaseModClass(modClazzName);
+            configureMod(modClazz, event.getASMHarvestedData());
+            isNetworkMod = FMLNetworkHandler.instance().registerNetworkMod(this, modClazz, event.getASMHarvestedData());
             ModLoaderNetworkHandler dummyHandler = null;
-            if (!this.isNetworkMod) {
-                FMLLog.fine("Injecting dummy network mod handler for BaseMod %s", new Object[]{this.getModId()});
+            if (!isNetworkMod)
+            {
+                FMLLog.fine("Injecting dummy network mod handler for BaseMod %s", getModId());
                 dummyHandler = new ModLoaderNetworkHandler(this);
                 FMLNetworkHandler.instance().registerNetworkMod(dummyHandler);
             }
-
             Constructor<? extends BaseModProxy> ctor = modClazz.getConstructor();
             ctor.setAccessible(true);
-            this.mod = (BaseModProxy)modClazz.newInstance();
-            if (dummyHandler != null) {
-                dummyHandler.setBaseMod(this.mod);
+            mod = modClazz.newInstance();
+            if (dummyHandler != null)
+            {
+                dummyHandler.setBaseMod(mod);
             }
-
-            ProxyInjector.inject(this, event.getASMHarvestedData(), FMLCommonHandler.instance().getSide());
-        } catch (Exception var7) {
-            this.controller.errorOccurred(this, var7);
-            Throwables.propagateIfPossible(var7);
+            ProxyInjector.inject(this, event.getASMHarvestedData(), FMLCommonHandler.instance().getSide(), new ILanguageAdapter.JavaAdapter());
         }
-
+        catch (Exception e)
+        {
+            controller.errorOccurred(this, e);
+            Throwables.propagateIfPossible(e);
+        }
     }
 
     @Subscribe
-    public void preInit(FMLPreInitializationEvent event) {
-        try {
-            this.gameTickHandler.setMod(this.mod);
-            this.guiTickHandler.setMod(this.mod);
+    public void preInit(FMLPreInitializationEvent event)
+    {
+        try
+        {
+            this.gameTickHandler.setMod(mod);
+            this.guiTickHandler.setMod(mod);
             TickRegistry.registerTickHandler(this.gameTickHandler, Side.CLIENT);
             TickRegistry.registerTickHandler(this.guiTickHandler, Side.CLIENT);
-            GameRegistry.registerWorldGenerator(ModLoaderHelper.buildWorldGenHelper(this.mod));
-            GameRegistry.registerFuelHandler(ModLoaderHelper.buildFuelHelper(this.mod));
-            GameRegistry.registerCraftingHandler(ModLoaderHelper.buildCraftingHelper(this.mod));
-            GameRegistry.registerPickupHandler(ModLoaderHelper.buildPickupHelper(this.mod));
-            GameRegistry.registerDispenserHandler(ModLoaderHelper.buildDispenseHelper(this.mod));
-            NetworkRegistry.instance().registerChatListener(ModLoaderHelper.buildChatListener(this.mod));
-            NetworkRegistry.instance().registerConnectionHandler(ModLoaderHelper.buildConnectionHelper(this.mod));
-        } catch (Exception var3) {
-            this.controller.errorOccurred(this, var3);
-            Throwables.propagateIfPossible(var3);
+            GameRegistry.registerWorldGenerator(ModLoaderHelper.buildWorldGenHelper(mod));
+            GameRegistry.registerFuelHandler(ModLoaderHelper.buildFuelHelper(mod));
+            GameRegistry.registerCraftingHandler(ModLoaderHelper.buildCraftingHelper(mod));
+            GameRegistry.registerPickupHandler(ModLoaderHelper.buildPickupHelper(mod));
+            NetworkRegistry.instance().registerChatListener(ModLoaderHelper.buildChatListener(mod));
+            NetworkRegistry.instance().registerConnectionHandler(ModLoaderHelper.buildConnectionHelper(mod));
         }
+        catch (Exception e)
+        {
+            controller.errorOccurred(this, e);
+            Throwables.propagateIfPossible(e);
+        }
+    }
 
+
+    @Subscribe
+    public void init(FMLInitializationEvent event)
+    {
+        try
+        {
+            mod.load();
+        }
+        catch (Throwable t)
+        {
+            controller.errorOccurred(this, t);
+            Throwables.propagateIfPossible(t);
+        }
     }
 
     @Subscribe
-    public void init(FMLInitializationEvent event) {
-        try {
-            this.mod.load();
-        } catch (Throwable var3) {
-            this.controller.errorOccurred(this, var3);
-            Throwables.propagateIfPossible(var3);
+    public void postInit(FMLPostInitializationEvent event)
+    {
+        try
+        {
+            mod.modsLoaded();
         }
-
+        catch (Throwable t)
+        {
+            controller.errorOccurred(this, t);
+            Throwables.propagateIfPossible(t);
+        }
     }
 
     @Subscribe
-    public void postInit(FMLPostInitializationEvent event) {
-        try {
-            this.mod.modsLoaded();
-        } catch (Throwable var3) {
-            this.controller.errorOccurred(this, var3);
-            Throwables.propagateIfPossible(var3);
-        }
-
-    }
-
-    @Subscribe
-    public void loadComplete(FMLLoadCompleteEvent complete) {
+    public void loadComplete(FMLLoadCompleteEvent complete)
+    {
         ModLoaderHelper.finishModLoading(this);
     }
 
     @Subscribe
-    public void serverStarting(FMLServerStartingEvent evt) {
-        for (Command cmd : serverCommands)
+    public void serverStarting(FMLServerStartingEvent evt)
+    {
+        for (ICommand cmd : serverCommands)
         {
             evt.registerServerCommand(cmd);
         }
     }
-
-    public ArtifactVersion getProcessedVersion() {
-        if (this.processedVersion == null) {
-            this.processedVersion = new DefaultArtifactVersion(this.modId, this.getVersion());
+    @Override
+    public ArtifactVersion getProcessedVersion()
+    {
+        if (processedVersion == null)
+        {
+            processedVersion = new DefaultArtifactVersion(modId, getVersion());
         }
-
-        return this.processedVersion;
+        return processedVersion;
     }
 
-    public boolean isImmutable() {
+    @Override
+    public boolean isImmutable()
+    {
         return false;
     }
 
-    public boolean isNetworkMod() {
+    @Override
+    public boolean isNetworkMod()
+    {
         return this.isNetworkMod;
     }
 
-    public String getDisplayVersion() {
-        return this.metadata != null ? this.metadata.version : this.getVersion();
+    @Override
+    public String getDisplayVersion()
+    {
+        return metadata!=null ? metadata.version : getVersion();
     }
 
-    public void addServerCommand(Command command) {
-        this.serverCommands.add(command);
+    public void addServerCommand(ICommand command)
+    {
+        serverCommands .add(command);
     }
 
-    public VersionRange acceptableMinecraftVersionRange() {
+    @Override
+    public VersionRange acceptableMinecraftVersionRange()
+    {
         return Loader.instance().getMinecraftModContainer().getStaticVersionRange();
+    }
+    @Override
+    public Certificate getSigningCertificate()
+    {
+        return null;
     }
 }

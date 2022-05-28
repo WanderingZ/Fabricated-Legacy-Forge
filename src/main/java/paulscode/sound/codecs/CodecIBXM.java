@@ -1,20 +1,24 @@
 package paulscode.sound.codecs;
 
-import ibxm.*;
-import ibxm.Module;
+import java.io.DataInputStream;
+import java.io.InputStream;
+import java.io.IOException;
+import java.net.URL;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.nio.ShortBuffer;
+import javax.sound.sampled.AudioFormat;
+
 import paulscode.sound.ICodec;
 import paulscode.sound.SoundBuffer;
 import paulscode.sound.SoundSystemConfig;
 import paulscode.sound.SoundSystemLogger;
 
-import javax.sound.sampled.AudioFormat;
-import java.io.DataInputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.net.URL;
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
-import java.nio.ShortBuffer;
+import ibxm.FastTracker2;
+import ibxm.IBXM;
+import ibxm.Module;
+import ibxm.ProTracker;
+import ibxm.ScreamTracker3;
 
 /**
  * The CodecIBXM class provides an ICodec interface for reading from MOD/S3M/XM
@@ -86,97 +90,97 @@ import java.nio.ShortBuffer;
  */
 public class CodecIBXM implements ICodec
 {
-    /**
-     * Used to return a current value from one of the synchronized
-     * boolean-interface methods.
-     */
+/**
+ * Used to return a current value from one of the synchronized
+ * boolean-interface methods.
+ */
     private static final boolean GET = false;
 
-    /**
-     * Used to set the value in one of the synchronized boolean-interface methods.
-     */
+/**
+ * Used to set the value in one of the synchronized boolean-interface methods.
+ */
     private static final boolean SET = true;
 
-    /**
-     * Used when a parameter for one of the synchronized boolean-interface methods
-     * is not aplicable.
-     */
+/**
+ * Used when a parameter for one of the synchronized boolean-interface methods
+ * is not aplicable.
+ */
     private static final boolean XXX = false;
 
-    /**
-     * True if there is no more data to read in.
-     */
+/**
+ * True if there is no more data to read in.
+ */
     private boolean endOfStream = false;
 
-    /**
-     * True if the stream has finished initializing.
-     */
+/**
+ * True if the stream has finished initializing.
+ */
     private boolean initialized = false;
 
-    /**
-     * Format the converted audio will be in.
-     */
+/**
+ * Format the converted audio will be in.
+ */
     private AudioFormat myAudioFormat = null;
 
-    /**
-     * True if the using library requires data read by this codec to be
-     * reverse-ordered before returning it from methods read() and readAll().
-     */
+/**
+ * True if the using library requires data read by this codec to be
+ * reverse-ordered before returning it from methods read() and readAll().
+ */
     private boolean reverseBytes = false;
 
-    /**
-     * IBXM decoder.
-     */
+/**
+ * IBXM decoder.
+ */
     private IBXM ibxm;
 
-    /**
-     * Module instance to be played.
-     */
+/**
+ * Module instance to be played.
+ */
     private Module module;
 
-    /**
-     * Duration of the audio (in frames).
-     */
+/**
+ * Duration of the audio (in frames).
+ */
     private int songDuration;
 
-    /**
-     * Audio read position (in frames).
-     */
+/**
+ * Audio read position (in frames).
+ */
     private int playPosition;
 
-    /**
-     * Processes status messages, warnings, and error messages.
-     */
+/**
+ * Processes status messages, warnings, and error messages.
+ */
     private SoundSystemLogger logger;
 
-    /**
-     * Constructor:  Grabs a handle to the logger.
-     */
+/**
+ * Constructor:  Grabs a handle to the logger.
+ */
     public CodecIBXM()
     {
         logger = SoundSystemConfig.getLogger();
     }
 
-    /**
-     * Tells this codec when it will need to reverse the byte order of
-     * the data before returning it in the read() and readAll() methods.  The
-     * IBXM library produces audio data in a format that some external audio
-     * libraries require to be reversed.  Derivatives of the Library and Source
-     * classes for audio libraries which require this type of data to be reversed
-     * will call the reverseByteOrder() method.
-     * @param b True if the calling audio library requires byte-reversal.
-     */
+/**
+ * Tells this codec when it will need to reverse the byte order of
+ * the data before returning it in the read() and readAll() methods.  The
+ * IBXM library produces audio data in a format that some external audio
+ * libraries require to be reversed.  Derivatives of the Library and Source
+ * classes for audio libraries which require this type of data to be reversed
+ * will call the reverseByteOrder() method.
+ * @param b True if the calling audio library requires byte-reversal.
+ */
     public void reverseByteOrder( boolean b )
     {
         reverseBytes = b;
     }
 
-    /**
-     * Prepares an audio stream to read from.  If another stream is already opened,
-     * it will be closed and a new audio stream opened in its place.
-     * @param url URL to an audio file to stream from.
-     * @return False if an error occurred or if end of stream was reached.
-     */
+/**
+ * Prepares an audio stream to read from.  If another stream is already opened,
+ * it will be closed and a new audio stream opened in its place.
+ * @param url URL to an audio file to stream from.
+ * @return False if an error occurred or if end of stream was reached.
+ */
     public boolean initialize( URL url )
     {
         initialized( SET, false );
@@ -206,7 +210,7 @@ public class CodecIBXM implements ICodec
             ibxm = new IBXM( 48000 );
         if( myAudioFormat == null )
             myAudioFormat = new AudioFormat( 48000, 16, 2, true, true );
-
+        
         try
         {
             setModule( loadModule( is ) );
@@ -241,7 +245,7 @@ public class CodecIBXM implements ICodec
             }
             return false;
         }
-
+        
         if( is != null )
         {
             try
@@ -257,21 +261,21 @@ public class CodecIBXM implements ICodec
         return true;
     }
 
-    /**
-     * Returns false if the stream is busy initializing.
-     * @return True if steam is initialized.
-     */
+/**
+ * Returns false if the stream is busy initializing.
+ * @return True if steam is initialized.
+ */
     public boolean initialized()
     {
         return initialized( GET, XXX );
     }
 
-    /**
-     * Reads in one stream buffer worth of audio data.  See
-     * {@link paulscode.sound.SoundSystemConfig SoundSystemConfig} for more
-     * information about accessing and changing default settings.
-     * @return The audio data wrapped into a SoundBuffer context.
-     */
+/**
+ * Reads in one stream buffer worth of audio data.  See
+ * {@link paulscode.sound.SoundSystemConfig SoundSystemConfig} for more
+ * information about accessing and changing default settings.
+ * @return The audio data wrapped into a SoundBuffer context.
+ */
     public SoundBuffer read()
     {
         if( endOfStream( GET, XXX ) )
@@ -291,7 +295,7 @@ public class CodecIBXM implements ICodec
         }
 
         int bufferFrameSize = (int) SoundSystemConfig.getStreamingBufferSize()
-                / 4;
+                                    / 4;
 
         int frames = songDuration - playPosition;
         if( frames > bufferFrameSize )
@@ -302,7 +306,7 @@ public class CodecIBXM implements ICodec
             endOfStream( SET, true );
             return null;
         }
-        byte[] outputBuffer = new byte[ frames * 4 ];
+		byte[] outputBuffer = new byte[ frames * 4 ];
 
         ibxm.get_audio( outputBuffer, frames );
 
@@ -322,13 +326,13 @@ public class CodecIBXM implements ICodec
         return buffer;
     }
 
-    /**
-     * Reads in all the audio data from the stream (up to the default
-     * "maximum file size".  See
-     * {@link paulscode.sound.SoundSystemConfig SoundSystemConfig} for more
-     * information about accessing and changing default settings.
-     * @return the audio data wrapped into a SoundBuffer context.
-     */
+/**
+ * Reads in all the audio data from the stream (up to the default
+ * "maximum file size".  See
+ * {@link paulscode.sound.SoundSystemConfig SoundSystemConfig} for more
+ * information about accessing and changing default settings.
+ * @return the audio data wrapped into a SoundBuffer context.
+ */
     public SoundBuffer readAll()
     {
         if( module == null )
@@ -345,9 +349,9 @@ public class CodecIBXM implements ICodec
         }
 
         int bufferFrameSize = (int) SoundSystemConfig.getFileChunkSize()
-                / 4;
+                                    / 4;
 
-        byte[] outputBuffer = new byte[ bufferFrameSize * 4 ];
+		byte[] outputBuffer = new byte[ bufferFrameSize * 4 ];
 
         // Buffer to contain the audio data:
         byte[] fullBuffer = null;
@@ -357,7 +361,7 @@ public class CodecIBXM implements ICodec
         int totalBytes = 0;
 
         while( (!endOfStream(GET, XXX)) &&
-                (totalBytes < SoundSystemConfig.getMaxFileSize()) )
+               (totalBytes < SoundSystemConfig.getMaxFileSize()) )
         {
             frames = songDuration - playPosition;
             if( frames > bufferFrameSize )
@@ -366,7 +370,7 @@ public class CodecIBXM implements ICodec
             totalBytes += (frames * 4);
 
             fullBuffer = appendByteArrays( fullBuffer, outputBuffer,
-                    frames * 4 );
+                                           frames * 4 );
 
             playPosition += frames;
             if( playPosition >= songDuration )
@@ -385,18 +389,18 @@ public class CodecIBXM implements ICodec
         return buffer;
     }
 
-    /**
-     * Returns false if there is still more data available to be read in.
-     * @return True if end of stream was reached.
-     */
+/**
+ * Returns false if there is still more data available to be read in.
+ * @return True if end of stream was reached.
+ */
     public boolean endOfStream()
     {
         return endOfStream( GET, XXX );
     }
 
-    /**
-     * Closes the audio stream and remove references to all instantiated objects.
-     */
+/**
+ * Closes the audio stream and remove references to all instantiated objects.
+ */
     public void cleanup()
     {
 //        if( ibxm != null )
@@ -404,24 +408,24 @@ public class CodecIBXM implements ICodec
         playPosition = 0;
     }
 
-    /**
-     * Returns the audio format of the data being returned by the read() and
-     * readAll() methods.
-     * @return Information wrapped into an AudioFormat context.
-     */
+/**
+ * Returns the audio format of the data being returned by the read() and
+ * readAll() methods.
+ * @return Information wrapped into an AudioFormat context.
+ */
     public AudioFormat getAudioFormat()
     {
         return myAudioFormat;
     }
 
-    /**
-     * Decodes the data in the specified InputStream into an instance of
-     * ibxm.Module.
-     * @param input an InputStream containing the module file to be decoded.
-     * @throws IllegalArgumentException if the data is not recognised as a module file.
-     */
+/**
+ * Decodes the data in the specified InputStream into an instance of
+ * ibxm.Module.
+ * @param input an InputStream containing the module file to be decoded.
+ * @throws IllegalArgumentException if the data is not recognised as a module file.
+ */
     private static Module loadModule( InputStream input )
-            throws IllegalArgumentException, IOException
+                                    throws IllegalArgumentException, IOException
     {
         DataInputStream data_input_stream = new DataInputStream( input );
 
@@ -445,9 +449,9 @@ public class CodecIBXM implements ICodec
         return ProTracker.load_mod( mod_header, data_input_stream );
     }
 
-    /**
-     * Sets the Module instance to be played.
-     */
+/**
+ * Sets the Module instance to be played.
+ */
     private void setModule( Module m )
     {
         if( m != null )
@@ -456,12 +460,12 @@ public class CodecIBXM implements ICodec
         songDuration = ibxm.calculate_song_duration();
     }
 
-    /**
-     * Internal method for synchronizing access to the boolean 'initialized'.
-     * @param action GET or SET.
-     * @param value New value if action == SET, or XXX if action == GET.
-     * @return True if steam is initialized.
-     */
+/**
+ * Internal method for synchronizing access to the boolean 'initialized'.
+ * @param action GET or SET.
+ * @param value New value if action == SET, or XXX if action == GET.
+ * @return True if steam is initialized.
+ */
     private synchronized boolean initialized( boolean action, boolean value )
     {
         if( action == SET )
@@ -469,12 +473,12 @@ public class CodecIBXM implements ICodec
         return initialized;
     }
 
-    /**
-     * Internal method for synchronizing access to the boolean 'endOfStream'.
-     * @param action GET or SET.
-     * @param value New value if action == SET, or XXX if action == GET.
-     * @return True if end of stream was reached.
-     */
+/**
+ * Internal method for synchronizing access to the boolean 'endOfStream'.
+ * @param action GET or SET.
+ * @param value New value if action == SET, or XXX if action == GET.
+ * @return True if end of stream was reached.
+ */
     private synchronized boolean endOfStream( boolean action, boolean value )
     {
         if( action == SET )
@@ -482,13 +486,13 @@ public class CodecIBXM implements ICodec
         return endOfStream;
     }
 
-    /**
-     * Trims down the size of the array if it is larger than the specified
-     * maximum length.
-     * @param array Array containing audio data.
-     * @param maxLength Maximum size this array may be.
-     * @return New array.
-     */
+/**
+ * Trims down the size of the array if it is larger than the specified
+ * maximum length.
+ * @param array Array containing audio data.
+ * @param maxLength Maximum size this array may be.
+ * @return New array.
+ */
     private static byte[] trimArray( byte[] array, int maxLength )
     {
         byte[] trimmedArray = null;
@@ -500,21 +504,21 @@ public class CodecIBXM implements ICodec
         return trimmedArray;
     }
 
-    /**
-     * Reverse-orders all bytes contained in the specified array.
-     * @param buffer Array containing audio data.
-     */
+/**
+ * Reverse-orders all bytes contained in the specified array.
+ * @param buffer Array containing audio data.
+ */
     public static void reverseBytes( byte[] buffer )
     {
         reverseBytes( buffer, 0, buffer.length );
     }
 
-    /**
-     * Reverse-orders the specified range of bytes contained in the specified array.
-     * @param buffer Array containing audio data.
-     * @param offset Array index to begin.
-     * @param size number of bytes to reverse-order.
-     */
+/**
+ * Reverse-orders the specified range of bytes contained in the specified array.
+ * @param buffer Array containing audio data.
+ * @param offset Array index to begin.
+ * @param size number of bytes to reverse-order.
+ */
     public static void reverseBytes( byte[] buffer, int offset, int size )
     {
 
@@ -527,12 +531,12 @@ public class CodecIBXM implements ICodec
         }
     }
 
-    /**
-     * Converts sound bytes to little-endian format.
-     * @param audio_bytes The original wave data
-     * @param two_bytes_data For stereo sounds.
-     * @return byte array containing the converted data.
-     */
+/**
+ * Converts sound bytes to little-endian format.
+ * @param audio_bytes The original wave data
+ * @param two_bytes_data For stereo sounds.
+ * @return byte array containing the converted data.
+ */
     private static byte[] convertAudioBytes( byte[] audio_bytes,
                                              boolean two_bytes_data )
     {
@@ -570,14 +574,14 @@ public class CodecIBXM implements ICodec
         return dest.array();
     }
 
-    /**
-     * Creates a new array with the second array appended to the end of the first
-     * array.
-     * @param arrayOne The first array.
-     * @param arrayTwo The second array.
-     * @param length How many bytes to append from the second array.
-     * @return Byte array containing information from both arrays.
-     */
+/**
+ * Creates a new array with the second array appended to the end of the first
+ * array.
+ * @param arrayOne The first array.
+ * @param arrayTwo The second array.
+ * @param length How many bytes to append from the second array.
+ * @return Byte array containing information from both arrays.
+ */
     private static byte[] appendByteArrays( byte[] arrayOne, byte[] arrayTwo,
                                             int length )
     {
@@ -610,7 +614,7 @@ public class CodecIBXM implements ICodec
             System.arraycopy( arrayOne, 0, newArray, 0, arrayOne.length );
             // fill the new array with the contents of both arrays:
             System.arraycopy( arrayTwo, 0, newArray, arrayOne.length,
-                    length );
+                              length );
             arrayOne = null;
             arrayTwo = null;
         }
@@ -618,19 +622,19 @@ public class CodecIBXM implements ICodec
         return newArray;
     }
 
-    /**
-     * Prints an error message.
-     * @param message Message to print.
-     */
+/**
+ * Prints an error message.
+ * @param message Message to print.
+ */
     private void errorMessage( String message )
     {
         logger.errorMessage( "CodecWav", message, 0 );
     }
 
-    /**
-     * Prints an exception's error message followed by the stack trace.
-     * @param e Exception containing the information to print.
-     */
+/**
+ * Prints an exception's error message followed by the stack trace.
+ * @param e Exception containing the information to print.
+ */
     private void printStackTrace( Exception e )
     {
         logger.printStackTrace( e, 1 );

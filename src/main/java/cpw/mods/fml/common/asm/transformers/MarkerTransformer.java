@@ -1,4 +1,34 @@
+/*
+ * Forge Mod Loader
+ * Copyright (c) 2012-2013 cpw.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the GNU Lesser Public License v2.1
+ * which accompanies this distribution, and is available at
+ * http://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ * 
+ * Contributors:
+ *     cpw - implementation
+ */
+
 package cpw.mods.fml.common.asm.transformers;
+
+import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.net.URL;
+import java.util.List;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
+import java.util.zip.ZipOutputStream;
+
+import org.objectweb.asm.ClassReader;
+import org.objectweb.asm.ClassWriter;
+import org.objectweb.asm.tree.ClassNode;
 
 import com.google.common.base.Charsets;
 import com.google.common.base.Splitter;
@@ -8,32 +38,24 @@ import com.google.common.collect.ListMultimap;
 import com.google.common.collect.Lists;
 import com.google.common.io.LineProcessor;
 import com.google.common.io.Resources;
+
 import cpw.mods.fml.relauncher.IClassTransformer;
-import org.objectweb.asm.ClassReader;
-import org.objectweb.asm.ClassWriter;
-import org.objectweb.asm.tree.ClassNode;
 
-import java.io.*;
-import java.net.URL;
-import java.util.Iterator;
-import java.util.List;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipInputStream;
-import java.util.zip.ZipOutputStream;
+public class MarkerTransformer implements IClassTransformer
+{
+    private ListMultimap<String, String> markers = ArrayListMultimap.create();
 
-public class MarkerTransformer implements IClassTransformer {
-    private ListMultimap<String, String> markers;
-
-    public MarkerTransformer() throws IOException {
+    public MarkerTransformer() throws IOException
+    {
         this("fml_marker.cfg");
     }
-
-    protected MarkerTransformer(String rulesFile) throws IOException {
-        this.markers = ArrayListMultimap.create();
-        this.readMapFile(rulesFile);
+    protected MarkerTransformer(String rulesFile) throws IOException
+    {
+        readMapFile(rulesFile);
     }
 
-    private void readMapFile(String rulesFile) throws IOException {
+    private void readMapFile(String rulesFile) throws IOException
+    {
         File file = new File(rulesFile);
         URL rulesResource;
         if (file.exists())
@@ -75,7 +97,11 @@ public class MarkerTransformer implements IClassTransformer {
         });
     }
 
-    public byte[] transform(String name, byte[] bytes) {
+    @SuppressWarnings("unchecked")
+    @Override
+    public byte[] transform(String name, String transformedName, byte[] bytes)
+    {
+    	if (bytes == null) { return null; }
         if (!markers.containsKey(name)) { return bytes; }
 
         ClassNode classNode = new ClassNode();
@@ -92,49 +118,81 @@ public class MarkerTransformer implements IClassTransformer {
         return writer.toByteArray();
     }
 
-    public static void main(String[] args) {
-        if (args.length < 2) {
+    public static void main(String[] args)
+    {
+        if (args.length < 2)
+        {
             System.out.println("Usage: MarkerTransformer <JarPath> <MapFile> [MapFile2]... ");
-        } else {
-            boolean hasTransformer = false;
-            MarkerTransformer[] trans = new MarkerTransformer[args.length - 1];
+            return;
+        }
 
-            for(int x = 1; x < args.length; ++x) {
-                try {
-                    trans[x - 1] = new MarkerTransformer(args[x]);
-                    hasTransformer = true;
-                } catch (IOException var7) {
-                    System.out.println("Could not read Transformer Map: " + args[x]);
-                    var7.printStackTrace();
-                }
+        boolean hasTransformer = false;
+        MarkerTransformer[] trans = new MarkerTransformer[args.length - 1];
+        for (int x = 1; x < args.length; x++)
+        {
+            try
+            {
+                trans[x - 1] = new MarkerTransformer(args[x]);
+                hasTransformer = true;
             }
-
-            if (!hasTransformer) {
-                System.out.println("Culd not find a valid transformer to perform");
-            } else {
-                File orig = new File(args[0]);
-                File temp = new File(args[0] + ".ATBack");
-                if (!orig.exists() && !temp.exists()) {
-                    System.out.println("Could not find target jar: " + orig);
-                } else if (!orig.renameTo(temp)) {
-                    System.out.println("Could not rename file: " + orig + " -> " + temp);
-                } else {
-                    try {
-                        processJar(temp, orig, trans);
-                    } catch (IOException var6) {
-                        var6.printStackTrace();
-                    }
-
-                    if (!temp.delete()) {
-                        System.out.println("Could not delete temp file: " + temp);
-                    }
-
-                }
+            catch (IOException e)
+            {
+                System.out.println("Could not read Transformer Map: " + args[x]);
+                e.printStackTrace();
             }
+        }
+
+        if (!hasTransformer)
+        {
+            System.out.println("Culd not find a valid transformer to perform");
+            return;
+        }
+
+        File orig = new File(args[0]);
+        File temp = new File(args[0] + ".ATBack");
+        if (!orig.exists() && !temp.exists())
+        {
+            System.out.println("Could not find target jar: " + orig);
+            return;
+        }
+/*
+        if (temp.exists())
+        {
+            if (orig.exists() && !orig.renameTo(new File(args[0] + (new SimpleDateFormat(".yyyy.MM.dd.HHmmss")).format(new Date()))))
+            {
+                System.out.println("Could not backup existing file: " + orig);
+                return;
+            }
+            if (!temp.renameTo(orig))
+            {
+                System.out.println("Could not restore backup from previous run: " + temp);
+                return;
+            }
+        }
+*/
+        if (!orig.renameTo(temp))
+        {
+            System.out.println("Could not rename file: " + orig + " -> " + temp);
+            return;
+        }
+
+        try
+        {
+            processJar(temp, orig, trans);
+        }
+        catch (IOException e)
+        {
+            e.printStackTrace();
+        }
+
+        if (!temp.delete())
+        {
+            System.out.println("Could not delete temp file: " + temp);
         }
     }
 
-    private static void processJar(File inFile, File outFile, MarkerTransformer[] transformers) throws IOException {
+    private static void processJar(File inFile, File outFile, MarkerTransformer[] transformers) throws IOException
+    {
         ZipInputStream inJar = null;
         ZipOutputStream outJar = null;
 
@@ -194,7 +252,7 @@ public class MarkerTransformer implements IClassTransformer {
 
                     for (MarkerTransformer trans : transformers)
                     {
-                        entryData = trans.transform(name, entryData);
+                        entryData = trans.transform(name, name, entryData);
                     }
                 }
 

@@ -1,54 +1,140 @@
+/*
+ * The FML Forge Mod Loader suite. Copyright (C) 2012 cpw
+ *
+ * This library is free software; you can redistribute it and/or modify it under the terms of the GNU Lesser General Public License as published by the Free
+ * Software Foundation; either version 2.1 of the License, or any later version.
+ *
+ * This library is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+ * A PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License along with this library; if not, write to the Free Software Foundation, Inc., 51
+ * Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
+ */
 package cpw.mods.fml.client;
 
-import com.google.common.base.Throwables;
-import com.google.common.collect.ImmutableMap;
-import cpw.mods.fml.client.modloader.ModLoaderClientHelper;
-import cpw.mods.fml.client.registry.KeyBindingRegistry;
-import cpw.mods.fml.client.registry.RenderingRegistry;
-import cpw.mods.fml.common.*;
-import cpw.mods.fml.common.network.EntitySpawnAdjustmentPacket;
-import cpw.mods.fml.common.network.EntitySpawnPacket;
-import cpw.mods.fml.common.network.ModMissingPacket;
-import cpw.mods.fml.common.registry.EntityRegistry;
-import cpw.mods.fml.common.registry.IEntityAdditionalSpawnData;
-import cpw.mods.fml.common.registry.IThrowableEntity;
-import cpw.mods.fml.common.registry.LanguageRegistry;
-import fr.catcore.fabricatedforge.mixininterface.Iclass_469;
-import fr.catcore.fabricatedforge.forged.ReflectionUtils;
-import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.render.entity.EntityRenderDispatcher;
-import net.minecraft.client.world.ClientWorld;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.mob.MobEntity;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.network.Packet;
-import net.minecraft.network.listener.PacketListener;
-import net.minecraft.network.packet.s2c.play.MapUpdate_S2CPacket;
-import net.minecraft.server.MinecraftServer;
-import net.minecraft.util.crash.CrashReport;
-import net.minecraft.world.World;
-
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-public class FMLClientHandler implements IFMLSidedHandler {
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiScreen;
+import net.minecraft.client.multiplayer.GuiConnecting;
+import net.minecraft.client.multiplayer.NetClientHandler;
+import net.minecraft.client.multiplayer.WorldClient;
+import net.minecraft.client.renderer.entity.Render;
+import net.minecraft.client.renderer.entity.RenderManager;
+import net.minecraft.crash.CrashReport;
+import net.minecraft.entity.Entity;
+import net.minecraft.entity.EntityLiving;
+import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.network.INetworkManager;
+import net.minecraft.network.packet.NetHandler;
+import net.minecraft.network.packet.Packet;
+import net.minecraft.network.packet.Packet131MapData;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.world.World;
+
+import com.google.common.base.Throwables;
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.MapDifference;
+import com.google.common.collect.MapDifference.ValueDifference;
+
+import cpw.mods.fml.client.modloader.ModLoaderClientHelper;
+import cpw.mods.fml.client.registry.KeyBindingRegistry;
+import cpw.mods.fml.client.registry.RenderingRegistry;
+import cpw.mods.fml.common.DummyModContainer;
+import cpw.mods.fml.common.DuplicateModsFoundException;
+import cpw.mods.fml.common.FMLCommonHandler;
+import cpw.mods.fml.common.FMLLog;
+import cpw.mods.fml.common.IFMLSidedHandler;
+import cpw.mods.fml.common.Loader;
+import cpw.mods.fml.common.LoaderException;
+import cpw.mods.fml.common.MetadataCollection;
+import cpw.mods.fml.common.MissingModsException;
+import cpw.mods.fml.common.ModContainer;
+import cpw.mods.fml.common.ModMetadata;
+import cpw.mods.fml.common.ObfuscationReflectionHelper;
+import cpw.mods.fml.common.WrongMinecraftVersionException;
+import cpw.mods.fml.common.network.EntitySpawnAdjustmentPacket;
+import cpw.mods.fml.common.network.EntitySpawnPacket;
+import cpw.mods.fml.common.network.ModMissingPacket;
+import cpw.mods.fml.common.registry.EntityRegistry.EntityRegistration;
+import cpw.mods.fml.common.registry.GameData;
+import cpw.mods.fml.common.registry.GameRegistry;
+import cpw.mods.fml.common.registry.IEntityAdditionalSpawnData;
+import cpw.mods.fml.common.registry.IThrowableEntity;
+import cpw.mods.fml.common.registry.ItemData;
+import cpw.mods.fml.common.registry.LanguageRegistry;
+import cpw.mods.fml.common.toposort.ModSortingException;
+import cpw.mods.fml.relauncher.Side;
+
+
+/**
+ * Handles primary communication from hooked code into the system
+ *
+ * The FML entry point is {@link #beginMinecraftLoading(Minecraft)} called from
+ * {@link Minecraft}
+ *
+ * Obfuscated code should focus on this class and other members of the "server"
+ * (or "client") code
+ *
+ * The actual mod loading is handled at arms length by {@link Loader}
+ *
+ * It is expected that a similar class will exist for each target environment:
+ * Bukkit and Client side.
+ *
+ * It should not be directly modified.
+ *
+ * @author cpw
+ *
+ */
+public class FMLClientHandler implements IFMLSidedHandler
+{
+    /**
+     * The singleton
+     */
     private static final FMLClientHandler INSTANCE = new FMLClientHandler();
+
+    /**
+     * A reference to the server itself
+     */
     private Minecraft client;
+
     private DummyModContainer optifineContainer;
+
     private boolean guiLoaded;
+
     private boolean serverIsRunning;
+
     private MissingModsException modsMissing;
+
+    private ModSortingException modSorting;
+
     private boolean loading;
+
     private WrongMinecraftVersionException wrongMC;
+
     private CustomModLoadingErrorDisplayException customError;
 
-    public FMLClientHandler() {
-    }
+	private DuplicateModsFoundException dupesFound;
 
-    public void beginMinecraftLoading(Minecraft minecraft) {
-        if (minecraft.isDemo())
+    private boolean serverShouldBeKilledQuietly;
+
+    /**
+     * Called to start the whole game off
+     *
+     * @param minecraft The minecraft instance being launched
+     */
+    public void beginMinecraftLoading(Minecraft minecraft)
+    {
+        client = minecraft;
+        if (minecraft.func_71355_q())
         {
             FMLLog.severe("DEMO MODE DETECTED, FML will not work. Finishing now.");
             haltGame("FML will not run in demo mode", new RuntimeException());
@@ -56,9 +142,7 @@ public class FMLClientHandler implements IFMLSidedHandler {
         }
 
         loading = true;
-        client = minecraft;
-        ObfuscationReflectionHelper.detectObfuscation(World.class);
-        TextureFXManager.instance().setClient(client);
+//        TextureFXManager.instance().setClient(client);
         FMLCommonHandler.instance().beginLoading(this);
         new ModLoaderClientHelper(client);
         try
@@ -82,9 +166,17 @@ public class FMLClientHandler implements IFMLSidedHandler {
         {
             wrongMC = wrong;
         }
+        catch (DuplicateModsFoundException dupes)
+        {
+        	dupesFound = dupes;
+        }
         catch (MissingModsException missing)
         {
             modsMissing = missing;
+        }
+        catch (ModSortingException sorting)
+        {
+            modSorting = sorting;
         }
         catch (CustomModLoadingErrorDisplayException custom)
         {
@@ -94,190 +186,368 @@ public class FMLClientHandler implements IFMLSidedHandler {
         catch (LoaderException le)
         {
             haltGame("There was a severe problem during mod loading that has caused the game to fail", le);
+            return;
         }
     }
 
-    public void haltGame(String message, Throwable t) {
-        this.client.printCrashReport(new CrashReport(message, t));
+    @Override
+    public void haltGame(String message, Throwable t)
+    {
+        client.func_71377_b(new CrashReport(message, t));
         throw Throwables.propagate(t);
     }
+    /**
+     * Called a bit later on during initialization to finish loading mods
+     * Also initializes key bindings
+     *
+     */
+    @SuppressWarnings("deprecation")
+    public void finishMinecraftLoading()
+    {
+        if (modsMissing != null || wrongMC != null || customError!=null || dupesFound!=null || modSorting!=null)
+        {
+            return;
+        }
+        try
+        {
+            Loader.instance().initializeMods();
+        }
+        catch (CustomModLoadingErrorDisplayException custom)
+        {
+            FMLLog.log(Level.SEVERE, custom, "A custom exception was thrown by a mod, the game will now halt");
+            customError = custom;
+            return;
+        }
+        catch (LoaderException le)
+        {
+            haltGame("There was a severe problem during mod loading that has caused the game to fail", le);
+            return;
+        }
+        LanguageRegistry.reloadLanguageTable();
+        RenderingRegistry.instance().loadEntityRenderers((Map<Class<? extends Entity>, Render>)RenderManager.field_78727_a.field_78729_o);
 
-    public void finishMinecraftLoading() {
-        if (this.modsMissing == null && this.wrongMC == null) {
-            try {
-                Loader.instance().initializeMods();
-            } catch (CustomModLoadingErrorDisplayException var2) {
-                FMLLog.log(Level.SEVERE, var2, "A custom exception was thrown by a mod, the game will now halt");
-                this.customError = var2;
-                return;
-            } catch (LoaderException var3) {
-                this.haltGame("There was a severe problem during mod loading that has caused the game to fail", var3);
-                return;
-            }
+        loading = false;
+        KeyBindingRegistry.instance().uploadKeyBindingsToGame(client.field_71474_y);
+    }
 
-            LanguageRegistry.reloadLanguageTable();
-            RenderingRegistry.instance().loadEntityRenderers(EntityRenderDispatcher.field_2094.renderers);
-            this.loading = false;
-            KeyBindingRegistry.instance().uploadKeyBindingsToGame(this.client.options);
+    public void onInitializationComplete()
+    {
+        if (wrongMC != null)
+        {
+            client.func_71373_a(new GuiWrongMinecraft(wrongMC));
+        }
+        else if (modsMissing != null)
+        {
+            client.func_71373_a(new GuiModsMissing(modsMissing));
+        }
+        else if (dupesFound != null)
+        {
+        	client.func_71373_a(new GuiDupesFound(dupesFound));
+        }
+        else if (modSorting != null)
+        {
+            client.func_71373_a(new GuiSortingProblem(modSorting));
+        }
+		else if (customError != null)
+        {
+            client.func_71373_a(new GuiCustomModLoadingErrorScreen(customError));
+        }
+        else
+        {
+            // Force renderengine to reload and re-initialize all textures
+            client.field_71446_o.func_78352_b();
+//            TextureFXManager.instance().loadTextures(client.field_71418_C.func_77292_e());
         }
     }
-
-    public void onInitializationComplete() {
-        if (this.wrongMC != null) {
-            this.client.openScreen(new GuiWrongMinecraft(this.wrongMC));
-        } else if (this.modsMissing != null) {
-            this.client.openScreen(new GuiModsMissing(this.modsMissing));
-        } else if (this.customError != null) {
-            this.client.openScreen(new GuiCustomModLoadingErrorScreen(this.customError));
-        } else {
-            TextureFXManager.instance().loadTextures(this.client.texturePackManager.getCurrentTexturePack());
-        }
-
+    /**
+     * Get the server instance
+     */
+    public Minecraft getClient()
+    {
+        return client;
     }
 
-    public Minecraft getClient() {
-        return this.client;
-    }
-
-    public Logger getMinecraftLogger() {
+    /**
+     * Get a handle to the client's logger instance
+     * The client actually doesn't have one- so we return null
+     */
+    public Logger getMinecraftLogger()
+    {
         return null;
     }
 
-    public static FMLClientHandler instance() {
+    /**
+     * @return the instance
+     */
+    public static FMLClientHandler instance()
+    {
         return INSTANCE;
     }
 
-    public void displayGuiScreen(PlayerEntity player, Screen gui) {
-        if (this.client.playerEntity == player && gui != null) {
-            this.client.openScreen(gui);
+    /**
+     * @param player
+     * @param gui
+     */
+    public void displayGuiScreen(EntityPlayer player, GuiScreen gui)
+    {
+        if (client.field_71439_g==player && gui != null) {
+            client.func_71373_a(gui);
         }
-
     }
 
-    public void addSpecialModEntries(ArrayList<ModContainer> mods) {
-        if (this.optifineContainer != null) {
-            mods.add(this.optifineContainer);
+    /**
+     * @param mods
+     */
+    public void addSpecialModEntries(ArrayList<ModContainer> mods)
+    {
+        if (optifineContainer!=null) {
+            mods.add(optifineContainer);
         }
-
     }
 
-    public List<String> getAdditionalBrandingInformation() {
-        return this.optifineContainer != null ? Collections.singletonList(String.format("Optifine %s", this.optifineContainer.getVersion())) : Collections.emptyList();
+    @Override
+    public List<String> getAdditionalBrandingInformation()
+    {
+        if (optifineContainer!=null)
+        {
+            return Arrays.asList(String.format("Optifine %s",optifineContainer.getVersion()));
+        } else {
+            return ImmutableList.<String>of();
+        }
     }
 
-    public Side getSide() {
+    @Override
+    public Side getSide()
+    {
         return Side.CLIENT;
     }
 
-    public boolean hasOptifine() {
-        return this.optifineContainer != null;
+    public boolean hasOptifine()
+    {
+        return optifineContainer!=null;
     }
 
-    public void showGuiScreen(Object clientGuiElement) {
-        Screen gui = (Screen)clientGuiElement;
-        this.client.openScreen(gui);
+    @Override
+    public void showGuiScreen(Object clientGuiElement)
+    {
+        GuiScreen gui = (GuiScreen) clientGuiElement;
+        client.func_71373_a(gui);
     }
 
-    public Entity spawnEntityIntoClientWorld(EntityRegistry.EntityRegistration er, EntitySpawnPacket packet) {
-        ClientWorld wc = this.client.world;
+    @Override
+    public Entity spawnEntityIntoClientWorld(EntityRegistration er, EntitySpawnPacket packet)
+    {
+        WorldClient wc = client.field_71441_e;
+
         Class<? extends Entity> cls = er.getEntityClass();
 
-        try {
+        try
+        {
             Entity entity;
-            if (er.hasCustomSpawning()) {
+            if (er.hasCustomSpawning())
+            {
                 entity = er.doCustomSpawning(packet);
-            } else {
-                entity = (Entity)cls.getConstructor(World.class).newInstance(wc);
-                entity.id = packet.entityId;
-                entity.refreshPositionAndAngles(packet.scaledX, packet.scaledY, packet.scaledZ, packet.scaledYaw, packet.scaledPitch);
-                if (entity instanceof MobEntity) {
-                    ((MobEntity)entity).field_3315 = packet.scaledHeadYaw;
+            }
+            else
+            {
+                entity = (Entity)(cls.getConstructor(World.class).newInstance(wc));
+                int offset = packet.entityId - entity.field_70157_k;
+                entity.field_70157_k = packet.entityId;
+                entity.func_70012_b(packet.scaledX, packet.scaledY, packet.scaledZ, packet.scaledYaw, packet.scaledPitch);
+                if (entity instanceof EntityLiving)
+                {
+                    ((EntityLiving)entity).field_70759_as = packet.scaledHeadYaw;
+                }
+
+                Entity parts[] = entity.func_70021_al();
+                if (parts != null)
+                {
+                    for (int j = 0; j < parts.length; j++)
+                    {
+                        parts[j].field_70157_k += offset;
+                    }
                 }
             }
 
-            entity.trackedX = packet.rawX;
-            entity.trackedY = packet.rawY;
-            entity.trackedZ = packet.rawZ;
-            if (entity instanceof IThrowableEntity) {
-                Entity thrower = this.client.playerEntity.id == packet.throwerId ? this.client.playerEntity : wc.method_1250(packet.throwerId);
+            entity.field_70118_ct = packet.rawX;
+            entity.field_70117_cu = packet.rawY;
+            entity.field_70116_cv = packet.rawZ;
+
+            if (entity instanceof IThrowableEntity)
+            {
+                Entity thrower = client.field_71439_g.field_70157_k == packet.throwerId ? client.field_71439_g : wc.func_73045_a(packet.throwerId);
                 ((IThrowableEntity)entity).setThrower(thrower);
             }
 
-            Entity[] parts = entity.getParts();
-            if (parts != null) {
-                int i = packet.entityId - entity.id;
-
-                for (Entity part : parts) {
-                    part.id += i;
-                }
+            if (packet.metadata != null)
+            {
+                entity.func_70096_w().func_75687_a((List)packet.metadata);
             }
 
-            if (packet.metadata != null) {
-                entity.getDataTracker().writeUpdatedEntries(packet.metadata);
+            if (packet.throwerId > 0)
+            {
+                entity.func_70016_h(packet.speedScaledX, packet.speedScaledY, packet.speedScaledZ);
             }
 
-            if (packet.throwerId > 0) {
-                entity.setVelocityClient(packet.speedScaledX, packet.speedScaledY, packet.speedScaledZ);
-            }
-
-            if (entity instanceof IEntityAdditionalSpawnData) {
+            if (entity instanceof IEntityAdditionalSpawnData)
+            {
                 ((IEntityAdditionalSpawnData)entity).readSpawnData(packet.dataStream);
             }
 
-            wc.method_1253(packet.entityId, entity);
+            wc.func_73027_a(packet.entityId, entity);
             return entity;
-        } catch (Exception var9) {
-            FMLLog.log(Level.SEVERE, var9, "A severe problem occurred during the spawning of an entity");
-            throw Throwables.propagate(var9);
+        }
+        catch (Exception e)
+        {
+            FMLLog.log(Level.SEVERE, e, "A severe problem occurred during the spawning of an entity");
+            throw Throwables.propagate(e);
         }
     }
 
-    public void adjustEntityLocationOnClient(EntitySpawnAdjustmentPacket packet) {
-        Entity ent = this.client.world.method_1250(packet.entityId);
-        if (ent != null) {
-            ent.trackedX = packet.serverX;
-            ent.trackedY = packet.serverY;
-            ent.trackedZ = packet.serverZ;
-        } else {
+    @Override
+    public void adjustEntityLocationOnClient(EntitySpawnAdjustmentPacket packet)
+    {
+        Entity ent = client.field_71441_e.func_73045_a(packet.entityId);
+        if (ent != null)
+        {
+            ent.field_70118_ct = packet.serverX;
+            ent.field_70117_cu = packet.serverY;
+            ent.field_70116_cv = packet.serverZ;
+        }
+        else
+        {
             FMLLog.fine("Attempted to adjust the position of entity %d which is not present on the client", packet.entityId);
         }
-
     }
 
-    public void beginServerLoading(MinecraftServer server) {
+    @Override
+    public void beginServerLoading(MinecraftServer server)
+    {
+        serverShouldBeKilledQuietly = false;
+        // NOOP
     }
 
-    public void finishServerLoading() {
+    @Override
+    public void finishServerLoading()
+    {
+        // NOOP
     }
 
-    public MinecraftServer getServer() {
-        return this.client.getServer();
+    @Override
+    public MinecraftServer getServer()
+    {
+        return client.func_71401_C();
     }
 
-    public void sendPacket(Packet packet) {
-        if (this.client.playerEntity != null) {
-            this.client.playerEntity.field_1667.sendPacket(packet);
+    @Override
+    public void sendPacket(Packet packet)
+    {
+        if(client.field_71439_g != null)
+        {
+            client.field_71439_g.field_71174_a.func_72552_c(packet);
+        }
+    }
+
+    @Override
+    public void displayMissingMods(ModMissingPacket modMissingPacket)
+    {
+        client.func_71373_a(new GuiModsMissingForServer(modMissingPacket));
+    }
+
+    /**
+     * If the client is in the midst of loading, we disable saving so that custom settings aren't wiped out
+     */
+    public boolean isLoading()
+    {
+        return loading;
+    }
+
+    @Override
+    public void handleTinyPacket(NetHandler handler, Packet131MapData mapData)
+    {
+        ((NetClientHandler)handler).fmlPacket131Callback(mapData);
+    }
+
+    @Override
+    public void setClientCompatibilityLevel(byte compatibilityLevel)
+    {
+        NetClientHandler.setConnectionCompatibilityLevel(compatibilityLevel);
+    }
+
+    @Override
+    public byte getClientCompatibilityLevel()
+    {
+        return NetClientHandler.getConnectionCompatibilityLevel();
+    }
+
+    public void warnIDMismatch(MapDifference<Integer, ItemData> idDifferences, boolean mayContinue)
+    {
+        GuiIdMismatchScreen mismatch = new GuiIdMismatchScreen(idDifferences, mayContinue);
+        client.func_71373_a(mismatch);
+    }
+
+    public void callbackIdDifferenceResponse(boolean response)
+    {
+        if (response)
+        {
+            serverShouldBeKilledQuietly = false;
+            GameData.releaseGate(true);
+            client.continueWorldLoading();
+        }
+        else
+        {
+            serverShouldBeKilledQuietly = true;
+            GameData.releaseGate(false);
+            // Reset and clear the client state
+            client.func_71403_a((WorldClient)null);
+            client.func_71373_a(null);
+        }
+    }
+
+    @Override
+    public boolean shouldServerShouldBeKilledQuietly()
+    {
+        return serverShouldBeKilledQuietly;
+    }
+
+    @Override
+    public void disconnectIDMismatch(MapDifference<Integer, ItemData> s, NetHandler toKill, INetworkManager mgr)
+    {
+        boolean criticalMismatch = !s.entriesOnlyOnLeft().isEmpty();
+        for (Entry<Integer, ValueDifference<ItemData>> mismatch : s.entriesDiffering().entrySet())
+        {
+            ValueDifference<ItemData> vd = mismatch.getValue();
+            if (!vd.leftValue().mayDifferByOrdinal(vd.rightValue()))
+            {
+                criticalMismatch = true;
+            }
         }
 
+        if (!criticalMismatch)
+        {
+            // We'll carry on with this connection, and just log a message instead
+            return;
+        }
+        // Nuke the connection
+        ((NetClientHandler)toKill).func_72553_e();
+        // Stop GuiConnecting
+        GuiConnecting.forceTermination((GuiConnecting)client.field_71462_r);
+        // pulse the network manager queue to clear cruft
+        mgr.func_74428_b();
+        // Nuke the world client
+        client.func_71403_a((WorldClient)null);
+        // Show error screen
+        warnIDMismatch(s, false);
     }
 
-    public void displayMissingMods(ModMissingPacket modMissingPacket) {
-        this.client.openScreen(new GuiModsMissingForServer(modMissingPacket));
-    }
-
-    public boolean isLoading() {
-        return this.loading;
-    }
-
-    public void handleTinyPacket(PacketListener handler, MapUpdate_S2CPacket mapData) {
-        ((Iclass_469)handler).fmlPacket131Callback(mapData);
-    }
-
-    public void setClientCompatibilityLevel(byte compatibilityLevel) {
-        ReflectionUtils.class_469_connectionCompatibilityLevel = compatibilityLevel;
-    }
-
-    public byte getClientCompatibilityLevel() {
-        return ReflectionUtils.class_469_connectionCompatibilityLevel;
+    /**
+     * Is this GUI type open?
+     *
+     * @param gui The type of GUI to test for
+     * @return if a GUI of this type is open
+     */
+    public boolean isGUIOpen(Class<? extends GuiScreen> gui)
+    {
+        return client.field_71462_r != null && client.field_71462_r.getClass().equals(gui);
     }
 }

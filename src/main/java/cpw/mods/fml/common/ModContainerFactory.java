@@ -1,27 +1,36 @@
+/*
+ * Forge Mod Loader
+ * Copyright (c) 2012-2013 cpw.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the GNU Lesser Public License v2.1
+ * which accompanies this distribution, and is available at
+ * http://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ * 
+ * Contributors:
+ *     cpw - implementation
+ */
+
 package cpw.mods.fml.common;
+
+import java.io.File;
+import java.util.regex.Pattern;
+
+import org.objectweb.asm.Type;
 
 import cpw.mods.fml.common.discovery.ModCandidate;
 import cpw.mods.fml.common.discovery.asm.ASMModParser;
 import cpw.mods.fml.common.discovery.asm.ModAnnotation;
 import cpw.mods.fml.common.modloader.ModLoaderModContainer;
-import org.objectweb.asm.Type;
 
-import java.io.File;
-import java.util.Iterator;
-import java.util.regex.Pattern;
-
-public class ModContainerFactory {
+public class ModContainerFactory
+{
     private static Pattern modClass = Pattern.compile(".*(\\.|)(mod\\_[^\\s$]+)$");
     private static ModContainerFactory INSTANCE = new ModContainerFactory();
-
-    public ModContainerFactory() {
-    }
-
     public static ModContainerFactory instance() {
         return INSTANCE;
     }
-
-    public ModContainer build(ASMModParser modParser, File modSource, ModCandidate container) {
+    public ModContainer build(ASMModParser modParser, File modSource, ModCandidate container)
+    {
         String className = modParser.getASMType().getClassName();
         if (modParser.isBaseMod(container.getRememberedBaseMods()) && modClass.matcher(className).find())
         {

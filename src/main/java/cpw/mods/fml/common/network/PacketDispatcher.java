@@ -1,64 +1,93 @@
+/*
+ * Forge Mod Loader
+ * Copyright (c) 2012-2013 cpw.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the GNU Lesser Public License v2.1
+ * which accompanies this distribution, and is available at
+ * http://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ * 
+ * Contributors:
+ *     cpw - implementation
+ */
+
 package cpw.mods.fml.common.network;
 
+import net.minecraft.entity.player.EntityPlayerMP;
+import net.minecraft.network.packet.Packet;
+import net.minecraft.network.packet.Packet131MapData;
+import net.minecraft.network.packet.Packet250CustomPayload;
+import net.minecraft.server.MinecraftServer;
 import cpw.mods.fml.common.FMLCommonHandler;
 import cpw.mods.fml.common.FMLLog;
-import net.minecraft.entity.player.ServerPlayerEntity;
-import net.minecraft.network.Packet;
-import net.minecraft.network.packet.c2s.play.CustomPayloadC2SPacket;
-import net.minecraft.network.packet.s2c.play.MapUpdate_S2CPacket;
-import net.minecraft.server.MinecraftServer;
 
-public class PacketDispatcher {
-    public PacketDispatcher() {
+/**
+ * A simple utility class to send packet 250 packets around the place
+ *
+ * @author cpw
+ *
+ */
+public class PacketDispatcher
+{
+    public static Packet250CustomPayload getPacket(String type, byte[] data)
+    {
+        return new Packet250CustomPayload(type, data);
     }
 
-    public static CustomPayloadC2SPacket getPacket(String type, byte[] data) {
-        return new CustomPayloadC2SPacket(type, data);
-    }
-
-    public static void sendPacketToServer(Packet packet) {
+    public static void sendPacketToServer(Packet packet)
+    {
         FMLCommonHandler.instance().getSidedDelegate().sendPacket(packet);
     }
 
-    public static void sendPacketToPlayer(Packet packet, Player player) {
-        if (player instanceof ServerPlayerEntity) {
-            ((ServerPlayerEntity)player).field_2823.sendPacket(packet);
+    public static void sendPacketToPlayer(Packet packet, Player player)
+    {
+        if (player instanceof EntityPlayerMP)
+        {
+            ((EntityPlayerMP)player).field_71135_a.func_72567_b(packet);
         }
-
     }
 
-    public static void sendPacketToAllAround(double X, double Y, double Z, double range, int dimensionId, Packet packet) {
+    public static void sendPacketToAllAround(double X, double Y, double Z, double range, int dimensionId, Packet packet)
+    {
         MinecraftServer server = FMLCommonHandler.instance().getMinecraftServerInstance();
-        if (server != null) {
-            server.getPlayerManager().sendToAround(X, Y, Z, range, dimensionId, packet);
-        } else {
-            FMLLog.fine("Attempt to send packet to all around without a server instance available", new Object[0]);
+        if (server != null)
+        {
+            server.func_71203_ab().func_72393_a(X, Y, Z, range, dimensionId, packet);
         }
-
+        else
+        {
+            FMLLog.fine("Attempt to send packet to all around without a server instance available");
+        }
     }
 
-    public static void sendPacketToAllInDimension(Packet packet, int dimId) {
+    public static void sendPacketToAllInDimension(Packet packet, int dimId)
+    {
         MinecraftServer server = FMLCommonHandler.instance().getMinecraftServerInstance();
-        if (server != null) {
-            server.getPlayerManager().sendToDimension(packet, dimId);
-        } else {
-            FMLLog.fine("Attempt to send packet to all in dimension without a server instance available", new Object[0]);
+        if (server != null)
+        {
+            server.func_71203_ab().func_72396_a(packet, dimId);
         }
-
+        else
+        {
+            FMLLog.fine("Attempt to send packet to all in dimension without a server instance available");
+        }
     }
 
-    public static void sendPacketToAllPlayers(Packet packet) {
+    public static void sendPacketToAllPlayers(Packet packet)
+    {
         MinecraftServer server = FMLCommonHandler.instance().getMinecraftServerInstance();
-        if (server != null) {
-            server.getPlayerManager().sendToAll(packet);
-        } else {
-            FMLLog.fine("Attempt to send packet to all in dimension without a server instance available", new Object[0]);
+        if (server != null)
+        {
+            server.func_71203_ab().func_72384_a(packet);
         }
-
+        else
+        {
+            FMLLog.fine("Attempt to send packet to all in dimension without a server instance available");
+        }
     }
 
-    public static MapUpdate_S2CPacket getTinyPacket(Object mod, short tag, byte[] data) {
+    public static Packet131MapData getTinyPacket(Object mod, short tag, byte[] data)
+    {
         NetworkModHandler nmh = FMLNetworkHandler.instance().findNetworkModHandler(mod);
-        return new MapUpdate_S2CPacket((short)nmh.getNetworkId(), tag, data);
+        return new Packet131MapData((short) nmh.getNetworkId(), tag, data);
     }
 }

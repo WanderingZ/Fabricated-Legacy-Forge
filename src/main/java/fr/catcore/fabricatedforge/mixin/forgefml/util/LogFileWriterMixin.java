@@ -1,8 +1,8 @@
 package fr.catcore.fabricatedforge.mixin.forgefml.util;
 
 import cpw.mods.fml.common.FMLLog;
-import net.minecraft.util.LogFileWriter;
-import net.minecraft.util.LogFormatter;
+import net.minecraft.util.logging.LogManagerImpl;
+import net.minecraft.util.logging.LogFormatter;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Overwrite;
 import org.spongepowered.asm.mixin.Shadow;
@@ -11,7 +11,7 @@ import java.util.logging.FileHandler;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-@Mixin(LogFileWriter.class)
+@Mixin(LogManagerImpl.class)
 public class LogFileWriterMixin {
 
     @Shadow public static Logger LOGGER;

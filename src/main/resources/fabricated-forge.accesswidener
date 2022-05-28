@@ -310,3 +310,5 @@ accessible method net/minecraft/server/dedicated/MinecraftDedicatedServer tick (
 
 accessible method net/minecraft/server/integrated/IntegratedServer setupWorld ()V
 accessible method net/minecraft/server/integrated/IntegratedServer populateCrashReport (Lnet/minecraft/util/crash/CrashReport;)Lnet/minecraft/util/crash/CrashReport;
+
+accessible class net/minecraft/util/logging/LogFormatter

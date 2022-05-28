@@ -1,6 +1,6 @@
 package fr.catcore.fabricatedforge.mixin.forgefml.util;
 
-import net.minecraft.util.LogFormatter;
+import net.minecraft.util.logging.LogFormatter;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.gen.Invoker;
 

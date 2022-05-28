@@ -1,62 +1,106 @@
+/*
+ * Forge Mod Loader
+ * Copyright (c) 2012-2013 cpw.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the GNU Lesser Public License v2.1
+ * which accompanies this distribution, and is available at
+ * http://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * Contributors:
+ *     cpw - implementation
+ */
+
 package cpw.mods.fml.common.versioning;
 
-public class DefaultArtifactVersion implements ArtifactVersion {
+public class DefaultArtifactVersion implements ArtifactVersion
+{
+
     private ComparableVersion comparableVersion;
     private String label;
     private boolean unbounded;
     private VersionRange range;
 
-    public DefaultArtifactVersion(String versionNumber) {
-        this.comparableVersion = new ComparableVersion(versionNumber);
-        this.range = VersionRange.createFromVersion(versionNumber, this);
+    public DefaultArtifactVersion(String versionNumber)
+    {
+        comparableVersion = new ComparableVersion(versionNumber);
+        range = VersionRange.createFromVersion(versionNumber, this);
     }
 
-    public DefaultArtifactVersion(String label, VersionRange range) {
+    public DefaultArtifactVersion(String label, VersionRange range)
+    {
         this.label = label;
         this.range = range;
     }
-
-    public DefaultArtifactVersion(String label, String version) {
+    public DefaultArtifactVersion(String label, String version)
+    {
         this(version);
         this.label = label;
     }
 
-    public DefaultArtifactVersion(String string, boolean unbounded) {
+    public DefaultArtifactVersion(String string, boolean unbounded)
+    {
         this.label = string;
         this.unbounded = true;
     }
 
-    public boolean equals(Object obj) {
+    @Override
+    public boolean equals(Object obj)
+    {
         return ((DefaultArtifactVersion)obj).containsVersion(this);
     }
 
-    public int compareTo(ArtifactVersion o) {
-        return this.unbounded ? 0 : this.comparableVersion.compareTo(((DefaultArtifactVersion)o).comparableVersion);
+    @Override
+    public int compareTo(ArtifactVersion o)
+    {
+        return unbounded ? 0 : this.comparableVersion.compareTo(((DefaultArtifactVersion)o).comparableVersion);
     }
 
-    public String getLabel() {
-        return this.label;
+    @Override
+    public String getLabel()
+    {
+        return label;
     }
 
-    public boolean containsVersion(ArtifactVersion source) {
-        if (!source.getLabel().equals(this.getLabel())) {
+    @Override
+    public boolean containsVersion(ArtifactVersion source)
+    {
+        if (!source.getLabel().equals(getLabel()))
+        {
             return false;
-        } else if (this.unbounded) {
+        }
+        if (unbounded)
+        {
             return true;
-        } else {
-            return this.range != null ? this.range.containsVersion(source) : false;
+        }
+        if (range != null)
+        {
+            return range.containsVersion(source);
+        }
+        else
+        {
+            return false;
         }
     }
 
-    public String getVersionString() {
-        return this.comparableVersion == null ? "unknown" : this.comparableVersion.toString();
+    @Override
+    public String getVersionString()
+    {
+        return comparableVersion == null ? "unknown" : comparableVersion.toString();
     }
 
-    public String getRangeString() {
-        return this.range == null ? "any" : this.range.toString();
+    @Override
+    public String getRangeString()
+    {
+        return range == null ? "any" : range.toString();
+    }
+    @Override
+    public String toString()
+    {
+        return label == null ? comparableVersion.toString() : label + ( unbounded ? "" : "@" + range);
     }
 
-    public String toString() {
-        return this.label == null ? this.comparableVersion.toString() : this.label + (this.unbounded ? "" : "@" + this.range);
+    public VersionRange getRange()
+    {
+        return range;
     }
 }

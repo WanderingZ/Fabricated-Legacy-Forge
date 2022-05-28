@@ -1,35 +1,81 @@
+/*
+ * Forge Mod Loader
+ * Copyright (c) 2012-2013 cpw.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the GNU Lesser Public License v2.1
+ * which accompanies this distribution, and is available at
+ * http://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ * 
+ * Contributors:
+ *     cpw - implementation
+ */
+
 package cpw.mods.fml.client.modloader;
 
-import cpw.mods.fml.client.registry.ISimpleBlockRenderingHandler;
-import net.minecraft.BaseMod;
 import net.minecraft.block.Block;
-import net.minecraft.client.class_535;
-import net.minecraft.world.WorldView;
+import net.minecraft.client.renderer.RenderBlocks;
+import net.minecraft.src.BaseMod;
+import net.minecraft.world.IBlockAccess;
+import cpw.mods.fml.client.registry.ISimpleBlockRenderingHandler;
 
-public class ModLoaderBlockRendererHandler implements ISimpleBlockRenderingHandler {
+/**
+ * @author cpw
+ *
+ */
+public class ModLoaderBlockRendererHandler implements ISimpleBlockRenderingHandler
+{
     private int renderId;
     private boolean render3dInInventory;
     private BaseMod mod;
 
-    public ModLoaderBlockRendererHandler(int renderId, boolean render3dInInventory, BaseMod mod) {
-        this.renderId = renderId;
-        this.render3dInInventory = render3dInInventory;
-        this.mod = mod;
+    /**
+     * @param mod
+     *
+     */
+    public ModLoaderBlockRendererHandler(int renderId, boolean render3dInInventory, BaseMod mod)
+    {
+        this.renderId=renderId;
+        this.render3dInInventory=render3dInInventory;
+        this.mod=mod;
     }
 
-    public int getRenderId() {
-        return this.renderId;
+    @Override
+    public int getRenderId()
+    {
+        return renderId;
     }
 
-    public boolean shouldRender3DInInventory() {
-        return this.render3dInInventory;
+    @Override
+    public boolean shouldRender3DInInventory()
+    {
+        return render3dInInventory;
     }
 
-    public boolean renderWorldBlock(WorldView world, int x, int y, int z, Block block, int modelId, class_535 renderer) {
-        return this.mod.renderWorldBlock(renderer, world, x, y, z, block, modelId);
+    /**
+     * @param world
+     * @param x
+     * @param y
+     * @param z
+     * @param block
+     * @param modelId
+     * @param renderer
+     */
+    @Override
+    public boolean renderWorldBlock(IBlockAccess world, int x, int y, int z, Block block, int modelId, RenderBlocks renderer)
+    {
+        return mod.renderWorldBlock(renderer, world, x, y, z, block, modelId);
     }
 
-    public void renderInventoryBlock(Block block, int metadata, int modelID, class_535 renderer) {
-        this.mod.renderInvBlock(renderer, block, metadata, modelID);
+    /**
+     * @param block
+     * @param metadata
+     * @param modelID
+     * @param renderer
+     */
+    @Override
+    public void renderInventoryBlock(Block block, int metadata, int modelID, RenderBlocks renderer)
+    {
+        mod.renderInvBlock(renderer, block, metadata, modelID);
     }
+
 }

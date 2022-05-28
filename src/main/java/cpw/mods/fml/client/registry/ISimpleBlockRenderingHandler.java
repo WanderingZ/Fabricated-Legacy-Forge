@@ -1,15 +1,28 @@
+/*
+ * Forge Mod Loader
+ * Copyright (c) 2012-2013 cpw.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the GNU Lesser Public License v2.1
+ * which accompanies this distribution, and is available at
+ * http://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ * 
+ * Contributors:
+ *     cpw - implementation
+ */
+
 package cpw.mods.fml.client.registry;
 
 import net.minecraft.block.Block;
-import net.minecraft.client.class_535;
-import net.minecraft.world.WorldView;
+import net.minecraft.client.renderer.RenderBlocks;
+import net.minecraft.world.IBlockAccess;
 
-public interface ISimpleBlockRenderingHandler {
-    void renderInventoryBlock(Block arg, int i, int j, class_535 arg2);
+public interface ISimpleBlockRenderingHandler
+{
+    public abstract void renderInventoryBlock(Block block, int metadata, int modelID, RenderBlocks renderer);
 
-    boolean renderWorldBlock(WorldView arg, int i, int j, int k, Block arg2, int l, class_535 arg3);
+    public abstract boolean renderWorldBlock(IBlockAccess world, int x, int y, int z, Block block, int modelId, RenderBlocks renderer);
 
-    boolean shouldRender3DInInventory();
+    public abstract boolean shouldRender3DInInventory();
 
-    int getRenderId();
+    public abstract int getRenderId();
 }

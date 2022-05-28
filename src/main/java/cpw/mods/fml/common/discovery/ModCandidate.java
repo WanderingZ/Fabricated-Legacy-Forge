@@ -1,29 +1,43 @@
-package cpw.mods.fml.common.discovery;
+/*
+ * Forge Mod Loader
+ * Copyright (c) 2012-2013 cpw.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the GNU Lesser Public License v2.1
+ * which accompanies this distribution, and is available at
+ * http://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ * 
+ * Contributors:
+ *     cpw - implementation
+ */
 
-import com.google.common.collect.Lists;
-import cpw.mods.fml.common.FMLLog;
-import cpw.mods.fml.common.ModContainer;
-import cpw.mods.fml.common.discovery.asm.ASMModParser;
+package cpw.mods.fml.common.discovery;
 
 import java.io.File;
 import java.util.List;
 
-public class ModCandidate {
+import com.google.common.collect.Lists;
+
+import cpw.mods.fml.common.FMLLog;
+import cpw.mods.fml.common.ModContainer;
+import cpw.mods.fml.common.discovery.asm.ASMModParser;
+
+
+public class ModCandidate
+{
     private File classPathRoot;
     private File modContainer;
     private ContainerType sourceType;
     private boolean classpath;
-    private List<String> baseModTypes;
+    private List<String> baseModTypes = Lists.newArrayList();
     private boolean isMinecraft;
-    private List<ASMModParser> baseModCandidateTypes;
+    private List<ASMModParser> baseModCandidateTypes = Lists.newArrayListWithCapacity(1);
 
-    public ModCandidate(File classPathRoot, File modContainer, ContainerType sourceType) {
+    public ModCandidate(File classPathRoot, File modContainer, ContainerType sourceType)
+    {
         this(classPathRoot, modContainer, sourceType, false, false);
     }
-
-    public ModCandidate(File classPathRoot, File modContainer, ContainerType sourceType, boolean isMinecraft, boolean classpath) {
-        this.baseModTypes = Lists.newArrayList();
-        this.baseModCandidateTypes = Lists.newArrayListWithCapacity(1);
+    public ModCandidate(File classPathRoot, File modContainer, ContainerType sourceType, boolean isMinecraft, boolean classpath)
+    {
         this.classPathRoot = classPathRoot;
         this.modContainer = modContainer;
         this.sourceType = sourceType;
@@ -31,45 +45,52 @@ public class ModCandidate {
         this.classpath = classpath;
     }
 
-    public File getClassPathRoot() {
-        return this.classPathRoot;
+    public File getClassPathRoot()
+    {
+        return classPathRoot;
     }
 
-    public File getModContainer() {
-        return this.modContainer;
+    public File getModContainer()
+    {
+        return modContainer;
     }
 
-    public ContainerType getSourceType() {
-        return this.sourceType;
+    public ContainerType getSourceType()
+    {
+        return sourceType;
     }
-
-    public List<ModContainer> explore(ASMDataTable table) {
-        List<ModContainer> mods = this.sourceType.findMods(this, table);
-        if (!this.baseModCandidateTypes.isEmpty()) {
-            FMLLog.info("Attempting to reparse the mod container %s", this.getModContainer().getName());
-            return this.sourceType.findMods(this, table);
-        } else {
+    public List<ModContainer> explore(ASMDataTable table)
+    {
+        List<ModContainer> mods = sourceType.findMods(this, table);
+        if (!baseModCandidateTypes.isEmpty())
+        {
+            FMLLog.info("Attempting to reparse the mod container %s", getModContainer().getName());
+            return sourceType.findMods(this, table);
+        }
+        else
+        {
             return mods;
         }
     }
 
-    public boolean isClasspath() {
-        return this.classpath;
+    public boolean isClasspath()
+    {
+        return classpath;
     }
-
-    public void rememberBaseModType(String className) {
-        this.baseModTypes.add(className);
+    public void rememberBaseModType(String className)
+    {
+        baseModTypes.add(className);
     }
-
-    public List<String> getRememberedBaseMods() {
-        return this.baseModTypes;
+    public List<String> getRememberedBaseMods()
+    {
+        return baseModTypes;
     }
-
-    public boolean isMinecraftJar() {
-        return this.isMinecraft;
+    public boolean isMinecraftJar()
+    {
+        return isMinecraft;
     }
-
-    public void rememberModCandidateType(ASMModParser modParser) {
-        this.baseModCandidateTypes.add(modParser);
+    public void rememberModCandidateType(ASMModParser modParser)
+    {
+        baseModCandidateTypes.add(modParser);
     }
 }

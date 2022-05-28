@@ -1,50 +1,71 @@
+/*
+ * Forge Mod Loader
+ * Copyright (c) 2012-2013 cpw.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the GNU Lesser Public License v2.1
+ * which accompanies this distribution, and is available at
+ * http://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ * 
+ * Contributors:
+ *     cpw - implementation
+ */
+
 package cpw.mods.fml.common.network;
+
+import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.network.INetworkManager;
+import net.minecraft.network.packet.NetHandler;
 
 import com.google.common.io.ByteArrayDataInput;
 import com.google.common.io.ByteArrayDataOutput;
 import com.google.common.io.ByteStreams;
-import fr.catcore.fabricatedforge.mixininterface.IPacketListener;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.network.Connection;
-import net.minecraft.network.listener.PacketListener;
 
-public class OpenGuiPacket extends FMLPacket {
+public class OpenGuiPacket extends FMLPacket
+{
     private int windowId;
     private int networkId;
     private int modGuiId;
     private int x;
     private int y;
     private int z;
-
-    public OpenGuiPacket() {
+    
+    public OpenGuiPacket()
+    {
         super(Type.GUIOPEN);
     }
 
-    public byte[] generatePacket(Object... data) {
+    @Override
+    public byte[] generatePacket(Object... data)
+    {
         ByteArrayDataOutput dat = ByteStreams.newDataOutput();
-        dat.writeInt((Integer)data[0]);
-        dat.writeInt((Integer)data[1]);
-        dat.writeInt((Integer)data[2]);
-        dat.writeInt((Integer)data[3]);
-        dat.writeInt((Integer)data[4]);
-        dat.writeInt((Integer)data[5]);
+        dat.writeInt((Integer) data[0]); // windowId
+        dat.writeInt((Integer) data[1]); // networkId
+        dat.writeInt((Integer) data[2]); // modGuiId
+        dat.writeInt((Integer) data[3]); // x
+        dat.writeInt((Integer) data[4]); // y
+        dat.writeInt((Integer) data[5]); // z
         return dat.toByteArray();
     }
 
-    public FMLPacket consumePacket(byte[] data) {
+    @Override
+    public FMLPacket consumePacket(byte[] data)
+    {
         ByteArrayDataInput dat = ByteStreams.newDataInput(data);
-        this.windowId = dat.readInt();
-        this.networkId = dat.readInt();
-        this.modGuiId = dat.readInt();
-        this.x = dat.readInt();
-        this.y = dat.readInt();
-        this.z = dat.readInt();
+        windowId = dat.readInt();
+        networkId = dat.readInt();
+        modGuiId = dat.readInt();
+        x = dat.readInt();
+        y = dat.readInt();
+        z = dat.readInt();
         return this;
     }
 
-    public void execute(Connection network, FMLNetworkHandler handler, PacketListener netHandler, String userName) {
-        PlayerEntity player = ((IPacketListener)netHandler).getPlayer();
-        player.openGui(this.networkId, this.modGuiId, player.world, this.x, this.y, this.z);
-        player.openScreenHandler.syncId = this.windowId;
+    @Override
+    public void execute(INetworkManager network, FMLNetworkHandler handler, NetHandler netHandler, String userName)
+    {
+        EntityPlayer player = netHandler.getPlayer();
+        player.openGui(networkId, modGuiId, player.field_70170_p, x, y, z);
+        player.field_71070_bA.field_75152_c = windowId;
     }
+
 }

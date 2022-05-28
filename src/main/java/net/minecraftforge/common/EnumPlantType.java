@@ -1,14 +1,12 @@
 package net.minecraftforge.common;
 
-public enum EnumPlantType {
+public enum EnumPlantType
+{
     Plains,
     Desert,
     Beach,
     Cave,
     Water,
     Nether,
-    Crop;
-
-    private EnumPlantType() {
-    }
+    Crop
 }

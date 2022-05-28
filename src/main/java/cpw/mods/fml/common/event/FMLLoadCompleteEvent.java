@@ -1,13 +1,31 @@
+/*
+ * Forge Mod Loader
+ * Copyright (c) 2012-2013 cpw.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the GNU Lesser Public License v2.1
+ * which accompanies this distribution, and is available at
+ * http://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ * 
+ * Contributors:
+ *     cpw - implementation
+ */
+
 package cpw.mods.fml.common.event;
 
-import cpw.mods.fml.common.LoaderState;
+import cpw.mods.fml.common.LoaderState.ModState;
 
-public class FMLLoadCompleteEvent extends FMLStateEvent {
-    public FMLLoadCompleteEvent(Object... data) {
+public class FMLLoadCompleteEvent extends FMLStateEvent
+{
+
+    public FMLLoadCompleteEvent(Object... data)
+    {
         super(data);
     }
-
-    public LoaderState.ModState getModState() {
-        return LoaderState.ModState.AVAILABLE;
+    
+    @Override
+    public ModState getModState()
+    {
+        return ModState.AVAILABLE;
     }
+
 }

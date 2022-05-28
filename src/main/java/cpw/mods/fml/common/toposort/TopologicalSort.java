@@ -1,12 +1,138 @@
+/*
+ * Forge Mod Loader
+ * Copyright (c) 2012-2013 cpw.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the GNU Lesser Public License v2.1
+ * which accompanies this distribution, and is available at
+ * http://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * Contributors:
+ *     cpw - implementation
+ */
+
 package cpw.mods.fml.common.toposort;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.NoSuchElementException;
+import java.util.Set;
+import java.util.SortedSet;
+import java.util.TreeSet;
 
-public class TopologicalSort {
-    public TopologicalSort() {
+import com.google.common.collect.Sets;
+import com.google.common.collect.Sets.SetView;
+
+import cpw.mods.fml.common.FMLLog;
+
+/**
+ * Topological sort for mod loading
+ *
+ * Based on a variety of sources, including http://keithschwarz.com/interesting/code/?dir=topological-sort
+ * @author cpw
+ *
+ */
+public class TopologicalSort
+{
+    public static class DirectedGraph<T> implements Iterable<T>
+    {
+        private final Map<T, SortedSet<T>> graph = new HashMap<T, SortedSet<T>>();
+        private List<T> orderedNodes = new ArrayList<T>();
+
+        public boolean addNode(T node)
+        {
+            // Ignore nodes already added
+            if (graph.containsKey(node))
+            {
+                return false;
+            }
+
+            orderedNodes.add(node);
+            graph.put(node, new TreeSet<T>(new Comparator<T>()
+            {
+                public int compare(T o1, T o2) {
+                    return orderedNodes.indexOf(o1)-orderedNodes.indexOf(o2);
+                }
+            }));
+            return true;
+        }
+
+        public void addEdge(T from, T to)
+        {
+            if (!(graph.containsKey(from) && graph.containsKey(to)))
+            {
+                throw new NoSuchElementException("Missing nodes from graph");
+            }
+
+            graph.get(from).add(to);
+        }
+
+        public void removeEdge(T from, T to)
+        {
+            if (!(graph.containsKey(from) && graph.containsKey(to)))
+            {
+                throw new NoSuchElementException("Missing nodes from graph");
+            }
+
+            graph.get(from).remove(to);
+        }
+
+        public boolean edgeExists(T from, T to)
+        {
+            if (!(graph.containsKey(from) && graph.containsKey(to)))
+            {
+                throw new NoSuchElementException("Missing nodes from graph");
+            }
+
+            return graph.get(from).contains(to);
+        }
+
+        public Set<T> edgesFrom(T from)
+        {
+            if (!graph.containsKey(from))
+            {
+                throw new NoSuchElementException("Missing node from graph");
+            }
+
+            return Collections.unmodifiableSortedSet(graph.get(from));
+        }
+        @Override
+        public Iterator<T> iterator()
+        {
+            return orderedNodes.iterator();
+        }
+
+        public int size()
+        {
+            return graph.size();
+        }
+
+        public boolean isEmpty()
+        {
+            return graph.isEmpty();
+        }
+
+        @Override
+        public String toString()
+        {
+            return graph.toString();
+        }
     }
 
-    public static <T> List<T> topologicalSort(TopologicalSort.DirectedGraph<T> graph) {
+    /**
+     * Sort the input graph into a topologically sorted list
+     *
+     * Uses the reverse depth first search as outlined in ...
+     * @param graph
+     * @return The sorted mods list.
+     */
+    public static <T> List<T> topologicalSort(DirectedGraph<T> graph)
+    {
         DirectedGraph<T> rGraph = reverse(graph);
         List<T> sortedResult = new ArrayList<T>();
         Set<T> visitedNodes = new HashSet<T>();
@@ -21,7 +147,8 @@ public class TopologicalSort {
         return sortedResult;
     }
 
-    public static <T> TopologicalSort.DirectedGraph<T> reverse(TopologicalSort.DirectedGraph<T> graph) {
+    public static <T> DirectedGraph<T> reverse(DirectedGraph<T> graph)
+    {
         DirectedGraph<T> result = new DirectedGraph<T>();
 
         for (T node : graph)
@@ -40,7 +167,8 @@ public class TopologicalSort {
         return result;
     }
 
-    public static <T> void explore(T node, TopologicalSort.DirectedGraph<T> graph, List<T> sortedResult, Set<T> visitedNodes, Set<T> expandedNodes) {
+    public static <T> void explore(T node, DirectedGraph<T> graph, List<T> sortedResult, Set<T> visitedNodes, Set<T> expandedNodes)
+    {
         // Have we been here before?
         if (visitedNodes.contains(node))
         {
@@ -51,8 +179,14 @@ public class TopologicalSort {
                 return;
             }
 
-            System.out.printf("%s: %s\n%s\n%s\n", node, sortedResult, visitedNodes, expandedNodes);
-            throw new ModSortingException("There was a cycle detected in the input graph, sorting is not possible", node, visitedNodes);
+            FMLLog.severe("Mod Sorting failed.");
+            FMLLog.severe("Visting node %s", node);
+            FMLLog.severe("Current sorted list : %s", sortedResult);
+            FMLLog.severe("Visited set for this node : %s", visitedNodes);
+            FMLLog.severe("Explored node set : %s", expandedNodes);
+            SetView<T> cycleList = Sets.difference(visitedNodes, expandedNodes);
+            FMLLog.severe("Likely cycle is in : %s", cycleList);
+            throw new ModSortingException("There was a cycle detected in the input graph, sorting is not possible", node, cycleList);
         }
 
         // Visit this node
@@ -68,75 +202,5 @@ public class TopologicalSort {
         sortedResult.add(node);
         // And mark ourselves as explored
         expandedNodes.add(node);
-    }
-
-    public static class DirectedGraph<T> implements Iterable<T> {
-        private final Map<T, SortedSet<T>> graph = new HashMap();
-        private List<T> orderedNodes = new ArrayList();
-
-        public DirectedGraph() {
-        }
-
-        public boolean addNode(T node) {
-            if (this.graph.containsKey(node)) {
-                return false;
-            } else {
-                this.orderedNodes.add(node);
-                this.graph.put(node, new TreeSet(new Comparator<T>() {
-                    public int compare(T o1, T o2) {
-                        return TopologicalSort.DirectedGraph.this.orderedNodes.indexOf(o1) - TopologicalSort.DirectedGraph.this.orderedNodes.indexOf(o2);
-                    }
-                }));
-                return true;
-            }
-        }
-
-        public void addEdge(T from, T to) {
-            if (this.graph.containsKey(from) && this.graph.containsKey(to)) {
-                ((SortedSet)this.graph.get(from)).add(to);
-            } else {
-                throw new NoSuchElementException("Missing nodes from graph");
-            }
-        }
-
-        public void removeEdge(T from, T to) {
-            if (this.graph.containsKey(from) && this.graph.containsKey(to)) {
-                ((SortedSet)this.graph.get(from)).remove(to);
-            } else {
-                throw new NoSuchElementException("Missing nodes from graph");
-            }
-        }
-
-        public boolean edgeExists(T from, T to) {
-            if (this.graph.containsKey(from) && this.graph.containsKey(to)) {
-                return ((SortedSet)this.graph.get(from)).contains(to);
-            } else {
-                throw new NoSuchElementException("Missing nodes from graph");
-            }
-        }
-
-        public Set<T> edgesFrom(T from) {
-            if (!this.graph.containsKey(from)) {
-                throw new NoSuchElementException("Missing node from graph");
-            } else {
-                return Collections.unmodifiableSortedSet((SortedSet)this.graph.get(from));
-            }
-        }
-
-        public Iterator<T> iterator() {
-            return this.orderedNodes.iterator();
-        }
-
-        public int size() {
-            return this.graph.size();
-        }
-
-        public boolean isEmpty() {
-            return this.graph.isEmpty();
-        }
-
-        public String toString() {
-            return this.graph.toString();
-        }
     }
 }

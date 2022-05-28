@@ -1,4 +1,42 @@
+/*
+ * Forge Mod Loader
+ * Copyright (c) 2012-2013 cpw.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the GNU Lesser Public License v2.1
+ * which accompanies this distribution, and is available at
+ * http://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * Contributors:
+ *     cpw - implementation
+ */
+
 package cpw.mods.fml.common.asm.transformers;
+
+import static org.objectweb.asm.Opcodes.ACC_FINAL;
+import static org.objectweb.asm.Opcodes.ACC_PRIVATE;
+import static org.objectweb.asm.Opcodes.ACC_PROTECTED;
+import static org.objectweb.asm.Opcodes.ACC_PUBLIC;
+
+import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.net.URL;
+import java.util.Collection;
+import java.util.List;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
+import java.util.zip.ZipOutputStream;
+
+import org.objectweb.asm.ClassReader;
+import org.objectweb.asm.ClassWriter;
+import org.objectweb.asm.tree.ClassNode;
+import org.objectweb.asm.tree.FieldNode;
+import org.objectweb.asm.tree.MethodNode;
 
 import com.google.common.base.Charsets;
 import com.google.common.base.Splitter;
@@ -8,88 +46,154 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Multimap;
 import com.google.common.io.LineProcessor;
 import com.google.common.io.Resources;
+
+import cpw.mods.fml.common.asm.transformers.deobf.FMLDeobfuscatingRemapper;
 import cpw.mods.fml.relauncher.IClassTransformer;
-import org.objectweb.asm.ClassReader;
-import org.objectweb.asm.ClassWriter;
-import org.objectweb.asm.tree.ClassNode;
-import org.objectweb.asm.tree.FieldNode;
-import org.objectweb.asm.tree.MethodNode;
 
-import java.io.*;
-import java.net.URL;
-import java.util.Collection;
-import java.util.Iterator;
-import java.util.List;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipInputStream;
-import java.util.zip.ZipOutputStream;
-
-public class AccessTransformer implements IClassTransformer {
+public class AccessTransformer implements IClassTransformer
+{
     private static final boolean DEBUG = false;
-    private Multimap<String, AccessTransformer.Modifier> modifiers;
+    private class Modifier
+    {
+        public String name = "";
+        public String desc = "";
+        public int oldAccess = 0;
+        public int newAccess = 0;
+        public int targetAccess = 0;
+        public boolean changeFinal = false;
+        public boolean markFinal = false;
+        protected boolean modifyClassVisibility;
 
-    public AccessTransformer() throws IOException {
+        private void setTargetAccess(String name)
+        {
+            if (name.startsWith("public")) targetAccess = ACC_PUBLIC;
+            else if (name.startsWith("private")) targetAccess = ACC_PRIVATE;
+            else if (name.startsWith("protected")) targetAccess = ACC_PROTECTED;
+
+            if (name.endsWith("-f"))
+            {
+                changeFinal = true;
+                markFinal = false;
+            }
+            else if (name.endsWith("+f"))
+            {
+                changeFinal = true;
+                markFinal = true;
+            }
+        }
+    }
+
+    private Multimap<String, Modifier> modifiers = ArrayListMultimap.create();
+
+    public AccessTransformer() throws IOException
+    {
         this("fml_at.cfg");
     }
-
-    protected AccessTransformer(String rulesFile) throws IOException {
-        this.modifiers = ArrayListMultimap.create();
-        this.readMapFile(rulesFile);
+    protected AccessTransformer(String rulesFile) throws IOException
+    {
+        readMapFile(rulesFile);
     }
 
-    private void readMapFile(String rulesFile) throws IOException {
+    private void readMapFile(String rulesFile) throws IOException
+    {
         File file = new File(rulesFile);
         URL rulesResource;
-        if (file.exists()) {
+        if (file.exists())
+        {
             rulesResource = file.toURI().toURL();
-        } else {
+        }
+        else
+        {
             rulesResource = Resources.getResource(rulesFile);
         }
-
-        Resources.readLines(rulesResource, Charsets.UTF_8, new LineProcessor<Void>() {
-            public Void getResult() {
+        Resources.readLines(rulesResource, Charsets.UTF_8, new LineProcessor<Void>()
+        {
+            @Override
+            public Void getResult()
+            {
                 return null;
             }
 
-            public boolean processLine(String input) throws IOException {
-                String line = ((String) Iterables.getFirst(Splitter.on('#').limit(2).split(input), "")).trim();
-                if (line.length() == 0) {
+            @Override
+            public boolean processLine(String input) throws IOException
+            {
+                String line = Iterables.getFirst(Splitter.on('#').limit(2).split(input), "").trim();
+                if (line.length()==0)
+                {
                     return true;
-                } else {
-                    List<String> parts = Lists.newArrayList(Splitter.on(" ").trimResults().split(line));
-                    if (parts.size() > 2) {
-                        throw new RuntimeException("Invalid config file line " + input);
-                    } else {
-                        AccessTransformer.Modifier m = AccessTransformer.this.new Modifier();
-                        m.setTargetAccess((String)parts.get(0));
-                        List<String> descriptor = Lists.newArrayList(Splitter.on(".").trimResults().split((CharSequence)parts.get(1)));
-                        if (descriptor.size() == 1) {
-                            m.modifyClassVisibility = true;
-                        } else {
-                            String nameReference = (String)descriptor.get(1);
-                            int parenIdx = nameReference.indexOf(40);
-                            if (parenIdx > 0) {
-                                m.desc = nameReference.substring(parenIdx);
-                                m.name = nameReference.substring(0, parenIdx);
-                            } else {
-                                m.name = nameReference;
-                            }
-                        }
-
-                        AccessTransformer.this.modifiers.put(((String)descriptor.get(0)).replace('/', '.'), m);
-                        return true;
+                }
+                List<String> parts = Lists.newArrayList(Splitter.on(" ").trimResults().split(line));
+                if (parts.size()>2)
+                {
+                    throw new RuntimeException("Invalid config file line "+ input);
+                }
+                Modifier m = new Modifier();
+                m.setTargetAccess(parts.get(0));
+                List<String> descriptor = Lists.newArrayList(Splitter.on(".").trimResults().split(parts.get(1)));
+                if (descriptor.size() == 1)
+                {
+                    m.modifyClassVisibility = true;
+                }
+                else
+                {
+                    String nameReference = descriptor.get(1);
+                    int parenIdx = nameReference.indexOf('(');
+                    if (parenIdx>0)
+                    {
+                        m.desc = nameReference.substring(parenIdx);
+                        m.name = nameReference.substring(0,parenIdx);
+                    }
+                    else
+                    {
+                        m.name = nameReference;
                     }
                 }
+                modifiers.put(descriptor.get(0).replace('/', '.'), m);
+                return true;
             }
         });
     }
 
-    public byte[] transform(String name, byte[] bytes) {
-        if (!modifiers.containsKey(name)) { return bytes; }
+    @SuppressWarnings("unchecked")
+    @Override
+    public byte[] transform(String name, String transformedName, byte[] bytes)
+    {
+        if (bytes == null) { return null; }
+        boolean makeAllPublic = FMLDeobfuscatingRemapper.INSTANCE.isRemappedClass(name);
+
+        if (DEBUG)
+        {
+            System.out.printf("Considering all methods and fields on %s (%s): %b\n", name, transformedName, makeAllPublic);
+        }
+        if (!makeAllPublic && !modifiers.containsKey(name)) { return bytes; }
 
         ClassNode classNode = new ClassNode();
         ClassReader classReader = new ClassReader(bytes);
         classReader.accept(classNode, 0);
+
+        if (makeAllPublic)
+        {
+            // class
+            Modifier m = new Modifier();
+            m.targetAccess = ACC_PUBLIC;
+            m.modifyClassVisibility = true;
+            modifiers.put(name,m);
+            // fields
+            m = new Modifier();
+            m.targetAccess = ACC_PUBLIC;
+            m.name = "*";
+            modifiers.put(name,m);
+            // methods
+            m = new Modifier();
+            m.targetAccess = ACC_PUBLIC;
+            m.name = "*";
+            m.desc = "<dummy>";
+            modifiers.put(name,m);
+            if (DEBUG)
+            {
+                System.out.printf("Injected all public modifiers for %s (%s)\n", name, transformedName);
+            }
+        }
 
         Collection<Modifier> mods = modifiers.get(name);
         for (Modifier m : mods)
@@ -148,93 +252,113 @@ public class AccessTransformer implements IClassTransformer {
         return writer.toByteArray();
     }
 
-    private String toBinary(int num) {
+    private String toBinary(int num)
+    {
         return String.format("%16s", Integer.toBinaryString(num)).replace(' ', '0');
     }
 
-    private int getFixedAccess(int access, AccessTransformer.Modifier target) {
+    private int getFixedAccess(int access, Modifier target)
+    {
         target.oldAccess = access;
         int t = target.targetAccess;
-        int ret = access & -8;
-        switch (access & 7) {
-            case 0:
-                ret |= t != 2 ? t : 0;
-                break;
-            case 1:
-                ret |= t != 2 && t != 0 && t != 4 ? t : 1;
-                break;
-            case 2:
-                ret |= t;
-                break;
-            case 3:
-            default:
-                throw new RuntimeException("The fuck?");
-            case 4:
-                ret |= t != 2 && t != 0 ? t : 4;
+        int ret = (access & ~7);
+
+        switch (access & 7)
+        {
+        case ACC_PRIVATE:
+            ret |= t;
+            break;
+        case 0: // default
+            ret |= (t != ACC_PRIVATE ? t : 0 /* default */);
+            break;
+        case ACC_PROTECTED:
+            ret |= (t != ACC_PRIVATE && t != 0 /* default */? t : ACC_PROTECTED);
+            break;
+        case ACC_PUBLIC:
+            ret |= (t != ACC_PRIVATE && t != 0 /* default */&& t != ACC_PROTECTED ? t : ACC_PUBLIC);
+            break;
+        default:
+            throw new RuntimeException("The fuck?");
         }
 
-        if (target.changeFinal && target.desc == "") {
-            if (target.markFinal) {
-                ret |= 16;
-            } else {
-                ret &= -17;
+        // Clear the "final" marker on fields only if specified in control field
+        if (target.changeFinal && target.desc == "")
+        {
+            if (target.markFinal)
+            {
+                ret |= ACC_FINAL;
+            }
+            else
+            {
+                ret &= ~ACC_FINAL;
             }
         }
-
         target.newAccess = ret;
         return ret;
     }
 
-    public static void main(String[] args) {
-        if (args.length < 2) {
+    public static void main(String[] args)
+    {
+        if (args.length < 2)
+        {
             System.out.println("Usage: AccessTransformer <JarPath> <MapFile> [MapFile2]... ");
             System.exit(1);
         }
 
         boolean hasTransformer = false;
         AccessTransformer[] trans = new AccessTransformer[args.length - 1];
-
-        for(int x = 1; x < args.length; ++x) {
-            try {
+        for (int x = 1; x < args.length; x++)
+        {
+            try
+            {
                 trans[x - 1] = new AccessTransformer(args[x]);
                 hasTransformer = true;
-            } catch (IOException var7) {
+            }
+            catch (IOException e)
+            {
                 System.out.println("Could not read Transformer Map: " + args[x]);
-                var7.printStackTrace();
+                e.printStackTrace();
             }
         }
 
-        if (!hasTransformer) {
+        if (!hasTransformer)
+        {
             System.out.println("Culd not find a valid transformer to perform");
             System.exit(1);
         }
 
         File orig = new File(args[0]);
         File temp = new File(args[0] + ".ATBack");
-        if (!orig.exists() && !temp.exists()) {
+        if (!orig.exists() && !temp.exists())
+        {
             System.out.println("Could not find target jar: " + orig);
             System.exit(1);
         }
 
-        if (!orig.renameTo(temp)) {
+        if (!orig.renameTo(temp))
+        {
             System.out.println("Could not rename file: " + orig + " -> " + temp);
             System.exit(1);
         }
 
-        try {
+        try
+        {
             processJar(temp, orig, trans);
-        } catch (IOException var6) {
-            var6.printStackTrace();
+        }
+        catch (IOException e)
+        {
+            e.printStackTrace();
             System.exit(1);
         }
 
-        if (!temp.delete()) {
+        if (!temp.delete())
+        {
             System.out.println("Could not delete temp file: " + temp);
         }
-
     }
 
-    private static void processJar(File inFile, File outFile, AccessTransformer[] transformers) throws IOException {
+    private static void processJar(File inFile, File outFile, AccessTransformer[] transformers) throws IOException
+    {
         ZipInputStream inJar = null;
         ZipOutputStream outJar = null;
 
@@ -294,7 +418,7 @@ public class AccessTransformer implements IClassTransformer {
 
                     for (AccessTransformer trans : transformers)
                     {
-                        entryData = trans.transform(name, entryData);
+                        entryData = trans.transform(name, name, entryData);
                     }
                 }
 
@@ -328,51 +452,11 @@ public class AccessTransformer implements IClassTransformer {
             }
         }
     }
-
-    public void ensurePublicAccessFor(String modClazzName) {
-        AccessTransformer.Modifier m = new AccessTransformer.Modifier();
+    public void ensurePublicAccessFor(String modClazzName)
+    {
+        Modifier m = new Modifier();
         m.setTargetAccess("public");
         m.modifyClassVisibility = true;
-        this.modifiers.put(modClazzName, m);
-    }
-
-    private class Modifier {
-        public String name;
-        public String desc;
-        public int oldAccess;
-        public int newAccess;
-        public int targetAccess;
-        public boolean changeFinal;
-        public boolean markFinal;
-        protected boolean modifyClassVisibility;
-
-        private Modifier() {
-            this.name = "";
-            this.desc = "";
-            this.oldAccess = 0;
-            this.newAccess = 0;
-            this.targetAccess = 0;
-            this.changeFinal = false;
-            this.markFinal = false;
-        }
-
-        private void setTargetAccess(String name) {
-            if (name.startsWith("public")) {
-                this.targetAccess = 1;
-            } else if (name.startsWith("private")) {
-                this.targetAccess = 2;
-            } else if (name.startsWith("protected")) {
-                this.targetAccess = 4;
-            }
-
-            if (name.endsWith("-f")) {
-                this.changeFinal = true;
-                this.markFinal = false;
-            } else if (name.endsWith("+f")) {
-                this.changeFinal = true;
-                this.markFinal = true;
-            }
-
-        }
+        modifiers.put(modClazzName, m);
     }
 }

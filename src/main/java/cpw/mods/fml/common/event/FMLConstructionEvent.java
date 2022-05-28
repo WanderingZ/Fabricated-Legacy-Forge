@@ -1,28 +1,45 @@
+/*
+ * Forge Mod Loader
+ * Copyright (c) 2012-2013 cpw.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the GNU Lesser Public License v2.1
+ * which accompanies this distribution, and is available at
+ * http://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ * 
+ * Contributors:
+ *     cpw - implementation
+ */
+
 package cpw.mods.fml.common.event;
 
-import cpw.mods.fml.common.LoaderState;
+import cpw.mods.fml.common.LoaderState.ModState;
 import cpw.mods.fml.common.ModClassLoader;
 import cpw.mods.fml.common.discovery.ASMDataTable;
 
-public class FMLConstructionEvent extends FMLStateEvent {
+public class FMLConstructionEvent extends FMLStateEvent
+{
     private ModClassLoader modClassLoader;
     private ASMDataTable asmData;
 
-    public FMLConstructionEvent(Object... eventData) {
-        super(new Object[0]);
+    public FMLConstructionEvent(Object... eventData)
+    {
         this.modClassLoader = (ModClassLoader)eventData[0];
-        this.asmData = (ASMDataTable)eventData[1];
+        this.asmData = (ASMDataTable) eventData[1];
     }
 
-    public ModClassLoader getModClassLoader() {
-        return this.modClassLoader;
+    public ModClassLoader getModClassLoader()
+    {
+        return modClassLoader;
     }
 
-    public LoaderState.ModState getModState() {
-        return LoaderState.ModState.CONSTRUCTED;
+    @Override
+    public ModState getModState()
+    {
+        return ModState.CONSTRUCTED;
     }
 
-    public ASMDataTable getASMHarvestedData() {
-        return this.asmData;
+    public ASMDataTable getASMHarvestedData()
+    {
+        return asmData;
     }
 }

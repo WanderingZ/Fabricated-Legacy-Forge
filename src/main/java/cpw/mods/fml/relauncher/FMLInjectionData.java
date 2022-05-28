@@ -1,3 +1,15 @@
+/*
+ * Forge Mod Loader
+ * Copyright (c) 2012-2013 cpw.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the GNU Lesser Public License v2.1
+ * which accompanies this distribution, and is available at
+ * http://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ * 
+ * Contributors:
+ *     cpw - implementation
+ */
+
 package cpw.mods.fml.relauncher;
 
 import java.io.File;
@@ -8,28 +20,34 @@ import java.util.List;
 import java.util.Properties;
 import java.util.logging.Level;
 
-public class FMLInjectionData {
+public class FMLInjectionData
+{
     static File minecraftHome;
     static String major;
     static String minor;
     static String rev;
     static String build;
     static String mccversion;
-    static String mcsversion;
-    public static List<String> containers = new ArrayList();
+    static String mcpversion;
+    static String deobfuscationDataHash;
 
-    public FMLInjectionData() {
-    }
+    public static List<String> containers = new ArrayList<String>();
 
-    static void build(File mcHome, ClassLoader classLoader) {
+    static void build(File mcHome, RelaunchClassLoader classLoader)
+    {
         minecraftHome = mcHome;
         InputStream stream = classLoader.getResourceAsStream("fmlversion.properties");
         Properties properties = new Properties();
-        if (stream != null) {
-            try {
+
+        if (stream != null)
+        {
+            try
+            {
                 properties.load(stream);
-            } catch (IOException var5) {
-                FMLRelaunchLog.log(Level.SEVERE, var5, "Could not get FML version information - corrupted installation detected!");
+            }
+            catch (IOException ex)
+            {
+                FMLRelaunchLog.log(Level.SEVERE, ex, "Could not get FML version information - corrupted installation detected!");
             }
         }
 
@@ -37,11 +55,17 @@ public class FMLInjectionData {
         minor = properties.getProperty("fmlbuild.minor.number", "missing");
         rev = properties.getProperty("fmlbuild.revision.number", "missing");
         build = properties.getProperty("fmlbuild.build.number", "missing");
-        mccversion = properties.getProperty("fmlbuild.mcclientversion", "missing");
-        mcsversion = properties.getProperty("fmlbuild.mcserverversion", "missing");
+        mccversion = properties.getProperty("fmlbuild.mcversion", "missing");
+        mcpversion = properties.getProperty("fmlbuild.mcpversion", "missing");
+        deobfuscationDataHash = properties.getProperty("fmlbuild.deobfuscation.hash","deadbeef");
     }
 
-    public static Object[] data() {
-        return new Object[]{major, minor, rev, build, mccversion, mcsversion, minecraftHome, containers};
+    static String debfuscationDataName()
+    {
+        return "deobfuscation_data_"+mccversion+".zip";
+    }
+    public static Object[] data()
+    {
+        return new Object[] { major, minor, rev, build, mccversion, mcpversion, minecraftHome, containers };
     }
 }

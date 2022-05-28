@@ -1,55 +1,107 @@
+/*
+ * Forge Mod Loader
+ * Copyright (c) 2012-2013 cpw.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the GNU Lesser Public License v2.1
+ * which accompanies this distribution, and is available at
+ * http://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ * 
+ * Contributors:
+ *     cpw - implementation
+ */
+
 package cpw.mods.fml.common.versioning;
 
-public class Restriction {
-    private final ArtifactVersion lowerBound;
-    private final boolean lowerBoundInclusive;
-    private final ArtifactVersion upperBound;
-    private final boolean upperBoundInclusive;
-    public static final Restriction EVERYTHING = new Restriction((ArtifactVersion)null, false, (ArtifactVersion)null, false);
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *  http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
 
-    public Restriction(ArtifactVersion lowerBound, boolean lowerBoundInclusive, ArtifactVersion upperBound, boolean upperBoundInclusive) {
+/**
+ * Describes a restriction in versioning.
+ *
+ * @author <a href="mailto:brett@apache.org">Brett Porter</a>
+ */
+public class Restriction
+{
+    private final ArtifactVersion lowerBound;
+
+    private final boolean lowerBoundInclusive;
+
+    private final ArtifactVersion upperBound;
+
+    private final boolean upperBoundInclusive;
+
+    public static final Restriction EVERYTHING = new Restriction( null, false, null, false );
+
+    public Restriction( ArtifactVersion lowerBound, boolean lowerBoundInclusive, ArtifactVersion upperBound,
+                        boolean upperBoundInclusive )
+    {
         this.lowerBound = lowerBound;
         this.lowerBoundInclusive = lowerBoundInclusive;
         this.upperBound = upperBound;
         this.upperBoundInclusive = upperBoundInclusive;
     }
 
-    public ArtifactVersion getLowerBound() {
-        return this.lowerBound;
+    public ArtifactVersion getLowerBound()
+    {
+        return lowerBound;
     }
 
-    public boolean isLowerBoundInclusive() {
-        return this.lowerBoundInclusive;
+    public boolean isLowerBoundInclusive()
+    {
+        return lowerBoundInclusive;
     }
 
-    public ArtifactVersion getUpperBound() {
-        return this.upperBound;
+    public ArtifactVersion getUpperBound()
+    {
+        return upperBound;
     }
 
-    public boolean isUpperBoundInclusive() {
-        return this.upperBoundInclusive;
+    public boolean isUpperBoundInclusive()
+    {
+        return upperBoundInclusive;
     }
 
-    public boolean containsVersion(ArtifactVersion version) {
-        int comparison;
-        if (this.lowerBound != null) {
-            comparison = this.lowerBound.compareTo(version);
-            if (comparison == 0 && !this.lowerBoundInclusive) {
+    public boolean containsVersion( ArtifactVersion version )
+    {
+        if ( lowerBound != null )
+        {
+            int comparison = lowerBound.compareTo( version );
+
+            if ( ( comparison == 0 ) && !lowerBoundInclusive )
+            {
                 return false;
             }
-
-            if (comparison > 0) {
+            if ( comparison > 0 )
+            {
                 return false;
             }
         }
+        if ( upperBound != null )
+        {
+            int comparison = upperBound.compareTo( version );
 
-        if (this.upperBound != null) {
-            comparison = this.upperBound.compareTo(version);
-            if (comparison == 0 && !this.upperBoundInclusive) {
+            if ( ( comparison == 0 ) && !upperBoundInclusive )
+            {
                 return false;
             }
-
-            if (comparison < 0) {
+            if ( comparison < 0 )
+            {
                 return false;
             }
         }
@@ -57,69 +109,103 @@ public class Restriction {
         return true;
     }
 
-    public int hashCode() {
+    @Override
+    public int hashCode()
+    {
         int result = 13;
-        if (this.lowerBound == null) {
-            ++result;
-        } else {
-            result += this.lowerBound.hashCode();
+
+        if ( lowerBound == null )
+        {
+            result += 1;
+        }
+        else
+        {
+            result += lowerBound.hashCode();
         }
 
-        result *= this.lowerBoundInclusive ? 1 : 2;
-        if (this.upperBound == null) {
+        result *= lowerBoundInclusive ? 1 : 2;
+
+        if ( upperBound == null )
+        {
             result -= 3;
-        } else {
-            result -= this.upperBound.hashCode();
+        }
+        else
+        {
+            result -= upperBound.hashCode();
         }
 
-        result *= this.upperBoundInclusive ? 2 : 3;
+        result *= upperBoundInclusive ? 2 : 3;
+
         return result;
     }
 
-    public boolean equals(Object other) {
-        if (this == other) {
+    @Override
+    public boolean equals( Object other )
+    {
+        if ( this == other )
+        {
             return true;
-        } else if (!(other instanceof Restriction)) {
+        }
+
+        if ( !( other instanceof Restriction ) )
+        {
             return false;
-        } else {
-            Restriction restriction = (Restriction)other;
-            if (this.lowerBound != null) {
-                if (!this.lowerBound.equals(restriction.lowerBound)) {
-                    return false;
-                }
-            } else if (restriction.lowerBound != null) {
-                return false;
-            }
+        }
 
-            if (this.lowerBoundInclusive != restriction.lowerBoundInclusive) {
+        Restriction restriction = (Restriction) other;
+        if ( lowerBound != null )
+        {
+            if ( !lowerBound.equals( restriction.lowerBound ) )
+            {
                 return false;
-            } else {
-                if (this.upperBound != null) {
-                    if (!this.upperBound.equals(restriction.upperBound)) {
-                        return false;
-                    }
-                } else if (restriction.upperBound != null) {
-                    return false;
-                }
-
-                return this.upperBoundInclusive == restriction.upperBoundInclusive;
             }
         }
+        else if ( restriction.lowerBound != null )
+        {
+            return false;
+        }
+
+        if ( lowerBoundInclusive != restriction.lowerBoundInclusive )
+        {
+            return false;
+        }
+
+        if ( upperBound != null )
+        {
+            if ( !upperBound.equals( restriction.upperBound ) )
+            {
+                return false;
+            }
+        }
+        else if ( restriction.upperBound != null )
+        {
+            return false;
+        }
+
+        if ( upperBoundInclusive != restriction.upperBoundInclusive )
+        {
+            return false;
+        }
+
+        return true;
     }
 
-    public String toString() {
+    public String toString()
+    {
         StringBuilder buf = new StringBuilder();
-        buf.append(this.isLowerBoundInclusive() ? "[" : "(");
-        if (this.getLowerBound() != null) {
-            buf.append(this.getLowerBound().toString());
-        }
 
-        buf.append(",");
-        if (this.getUpperBound() != null) {
-            buf.append(this.getUpperBound().toString());
+        buf.append( isLowerBoundInclusive() ? "[" : "(" );
+        if ( getLowerBound() != null )
+        {
+            buf.append( getLowerBound().toString() );
         }
+        buf.append( "," );
+        if ( getUpperBound() != null )
+        {
+            buf.append( getUpperBound().toString() );
+        }
+        buf.append( isUpperBoundInclusive() ? "]" : ")" );
 
-        buf.append(this.isUpperBoundInclusive() ? "]" : ")");
         return buf.toString();
     }
 }
